@@ -12,7 +12,7 @@
 	<artifactId>flixbook-backend</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>flixbook-backend</name>
-	<description>Backend per l&apos;applicazione FlixBook per lo studio legale</description>
+	<description>Backend per l&apos;applicazione FlixBook per studio medico</description>
 	<url/>
 	<licenses>
 		<license/>

@@ -1,29 +1,26 @@
-// src/components/ConsultantCard.tsx
 import React from 'react';
-import { Card, Button } from 'react-bootstrap';
+import { Card } from 'react-bootstrap';
 
-// Definiamo le props (proprietà) che questo componente accetterà
 interface ConsultantCardProps {
   name: string;
   specialization: string;
   description: string;
-  imageUrl?: string; // URL dell'immagine (opzionale)
+  imageUrl: string;
 }
 
-function ConsultantCard({ name, specialization, description, imageUrl }: ConsultantCardProps) {
+const ConsultantCard: React.FC<ConsultantCardProps> = ({ name, specialization, description, imageUrl }) => {
   return (
-    <Card className="text-center shadow-sm">
-      <Card.Img variant="top" src={imageUrl || "https://via.placeholder.com/150"} alt={`Immagine di ${name}`} />
+    <Card className="text-center shadow-sm" style={{ width: '18rem' }}>
+      <Card.Img variant="top" src={imageUrl} alt={name} style={{ height: '180px', objectFit: 'cover' }} />
       <Card.Body>
         <Card.Title>{name}</Card.Title>
         <Card.Subtitle className="mb-2 text-muted">{specialization}</Card.Subtitle>
         <Card.Text>
           {description}
         </Card.Text>
-        <Button variant="outline-primary" size="sm">Vedi Profilo</Button> {/* O un link per prenotare direttamente */}
       </Card.Body>
     </Card>
   );
-}
+};
 
 export default ConsultantCard;
