@@ -25,9 +25,11 @@ import java.util.List;
 public class SecurityConfig {
 
     private final CustomUserDetailsService customUserDetailsService;
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
-    public SecurityConfig(CustomUserDetailsService customUserDetailsService) {
+    public SecurityConfig(CustomUserDetailsService customUserDetailsService, JwtAuthenticationFilter jwtAuthenticationFilter) {
         this.customUserDetailsService = customUserDetailsService;
+        this.jwtAuthenticationFilter = jwtAuthenticationFilter;
     }
 
     @Bean
@@ -35,17 +37,23 @@ public class SecurityConfig {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/api/auth/login").permitAll()
-                        .requestMatchers("/api/specialita/**").permitAll() // Permetti l'accesso alle specialità
-                        .requestMatchers("/api/prestazioni/**").permitAll() // Permetti l'accesso alle prestazioni
-                        .requestMatchers("/api/medici/**").permitAll() // Permetti l'accesso ai medici
+                        // Endpoint pubblici che non richiedono autenticazione
+                        .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/api/specialita/**").permitAll()
+                        .requestMatchers("/api/prestazioni/**").permitAll()
                         .requestMatchers("/api/disponibilita/**").permitAll()
-
+                        .requestMatchers("/api/medici/info/**").permitAll()
+                        .requestMatchers("/api/pazienti/info/**").permitAll()
+                        // Endpoint protetti con ruoli specifici
+                        .requestMatchers("/api/medici/**").hasRole("MEDICO")
+                        .requestMatchers("/api/pazienti/**").hasRole("PAZIENTE")
+                        // Tutte le altre richieste devono essere autenticate
                         .anyRequest().authenticated())
                 .authenticationProvider(authenticationProvider())
-                .formLogin(AbstractHttpConfigurer::disable)
-                .httpBasic(AbstractHttpConfigurer::disable);
+                // Aggiungiamo il filtro JWT prima del filtro standard di Spring
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

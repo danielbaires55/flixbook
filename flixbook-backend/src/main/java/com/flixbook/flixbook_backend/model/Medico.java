@@ -22,7 +22,7 @@ public class Medico {
     private String imgProfUrl;
     
     private String biografia;
-    private String ruolo;
+    private String ruolo = "ROLE_MEDICO";
 
     // Getters e Setters
     public Long getId() { return id; }

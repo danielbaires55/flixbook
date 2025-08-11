@@ -4,10 +4,12 @@ export interface Servizio {
 }
 
 export interface Medico {
-  id: number;
-  nome: string;
-  cognome: string;
-  
+    id: number;
+    nome: string;
+    cognome: string;
+    email: string;
+    telefono: string;
+    biografia: string;
 }
 
 export interface Disponibilita {
@@ -17,3 +19,12 @@ export interface Disponibilita {
   dataFine: string;
   attiva: boolean;
 }
+
+export interface Paziente {
+  id: number;
+  nome: string;
+  cognome: string;
+  email: string;
+  telefono: string;
+}
+
