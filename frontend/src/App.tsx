@@ -5,6 +5,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 import BookingCalendar from './components/BookingCalendar';
 import Login from './components/Login';
+import PazienteRegistrationForm from './components/PazienteRegistrationForm'; // <-- Importa il nuovo componente
 import MedicoDashboard from './components/MedicoDashboard';
 import PazienteDashboard from './components/PazienteDashboard';
 import CreateDisponibilitaForm from './components/CreateDisponibilitaForm';
@@ -29,7 +30,8 @@ const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
   }
 
   const decodedToken = jwtDecode<MyJwtPayload>(token);
-  const userRole = decodedToken.role;
+  // Nota: Spring Security usa 'ROLE_PAZIENTE' o 'ROLE_MEDICO'
+  const userRole = `ROLE_${decodedToken.role}`; 
 
   if (!allowedRoles.includes(userRole)) {
     // Se il ruolo non è permesso, reindirizza alla home o a una pagina di errore
@@ -43,17 +45,20 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Rotta pubblica per la home (calendario prenotazioni) */}
+        {/* Rotta pubblica per il calendario delle prenotazioni */}
         <Route path="/book" element={<BookingCalendar />} />
         
         {/* Rotta pubblica per il login */}
         <Route path="/login" element={<Login />} />
 
+        {/* Rotta pubblica per la registrazione del paziente */}
+        <Route path="/register" element={<PazienteRegistrationForm />} />
+
         {/* Rotta protetta per il Medico */}
         <Route 
           path="/medico-dashboard" 
           element={
-            <ProtectedRoute allowedRoles={['MEDICO']}>
+            <ProtectedRoute allowedRoles={['ROLE_MEDICO']}>
               <MedicoDashboard />
             </ProtectedRoute>
           } 
@@ -63,7 +68,7 @@ function App() {
         <Route 
           path="/medico/create-disponibilita" 
           element={
-            <ProtectedRoute allowedRoles={['MEDICO']}>
+            <ProtectedRoute allowedRoles={['ROLE_MEDICO']}>
               <CreateDisponibilitaForm />
             </ProtectedRoute>
           } 
@@ -73,14 +78,14 @@ function App() {
         <Route 
           path="/paziente-dashboard" 
           element={
-            <ProtectedRoute allowedRoles={['PAZIENTE']}>
+            <ProtectedRoute allowedRoles={['ROLE_PAZIENTE']}>
               <PazienteDashboard />
             </ProtectedRoute>
           } 
         />
 
-        {/* Rotta catch-all per reindirizzare gli URL non corrispondenti al login */}
-        <Route path="*" element={<Navigate to="/login" />} />
+        {/* Rotta catch-all per reindirizzare gli URL non corrispondenti al calendario */}
+        <Route path="*" element={<Navigate to="/book" />} />
       </Routes>
     </BrowserRouter>
   );

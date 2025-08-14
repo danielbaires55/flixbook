@@ -3,8 +3,9 @@ package com.flixbook.flixbook_backend.service;
 import com.flixbook.flixbook_backend.model.Paziente;
 import com.flixbook.flixbook_backend.repository.PazienteRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.crypto.password.PasswordEncoder; // Import the PasswordEncoder
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 @Service
@@ -14,7 +15,7 @@ public class PazienteService {
     private PazienteRepository pazienteRepository;
 
     @Autowired
-    private PasswordEncoder passwordEncoder; // Inietta il PasswordEncoder
+    private PasswordEncoder passwordEncoder;
 
     public Paziente registerPaziente(Paziente paziente) {
         // Verifica se l'email esiste già
@@ -25,11 +26,12 @@ public class PazienteService {
         // Cripta la password prima di salvare l'entità
         paziente.setPasswordHash(passwordEncoder.encode(paziente.getPasswordHash()));
 
+        paziente.setDataRegistrazione(LocalDateTime.now());
+
         // Salva il paziente nel database
         return pazienteRepository.save(paziente);
     }
     
-    // Metodo per trovare un paziente tramite email
     public Optional<Paziente> findPazienteByEmail(String email) {
         return pazienteRepository.findByEmail(email);
     }

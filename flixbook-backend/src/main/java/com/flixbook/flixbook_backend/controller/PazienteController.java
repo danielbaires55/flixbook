@@ -18,9 +18,16 @@ public class PazienteController {
     private PazienteService pazienteService;
 
     @PostMapping("/register")
-    public ResponseEntity<Paziente> registerPaziente(@RequestBody Paziente paziente) {
-        Paziente newPaziente = pazienteService.registerPaziente(paziente);
-        return new ResponseEntity<>(newPaziente, HttpStatus.CREATED);
+    public ResponseEntity<?> registerPaziente(@RequestBody Paziente paziente) {
+        try {
+            Paziente newPaziente = pazienteService.registerPaziente(paziente);
+            // Non restituire la password hashata
+            newPaziente.setPasswordHash(null); 
+            return new ResponseEntity<>(newPaziente, HttpStatus.CREATED);
+        } catch (IllegalArgumentException e) {
+            // Cattura l'eccezione se l'email esiste già
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
+        }
     }
     
     // Nuovo endpoint per il profilo del paziente
@@ -37,7 +44,10 @@ public class PazienteController {
         
         if (pazienteOptional.isPresent()) {
             // Se il paziente viene trovato, restituisci i suoi dati
-            return ResponseEntity.ok(pazienteOptional.get());
+            Paziente paziente = pazienteOptional.get();
+            // Evita di esporre la password hashata
+            paziente.setPasswordHash(null);
+            return ResponseEntity.ok(paziente);
         } else {
             // Se non viene trovato, restituisci un errore 404
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();

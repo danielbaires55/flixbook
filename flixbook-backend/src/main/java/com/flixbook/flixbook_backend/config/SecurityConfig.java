@@ -49,6 +49,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/medici/info/**").permitAll()
                           // --> Aggiungi questa riga per rendere l'endpoint pubblico <--
                         .requestMatchers("/api/disponibilita/**").permitAll()
+                        .requestMatchers("/api/pazienti/register").permitAll()
                         // Ora anche l'endpoint per le prestazioni per specialità è pubblico
                         .requestMatchers("/api/prestazioni/bySpecialita/**").permitAll()
 
