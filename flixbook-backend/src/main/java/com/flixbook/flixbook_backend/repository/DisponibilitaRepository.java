@@ -11,6 +11,10 @@ import java.util.List;
 
 public interface DisponibilitaRepository extends JpaRepository<Disponibilita, Long> {
 
+    // Trova tutte le disponibilità di un medico specifico
+    List<Disponibilita> findByMedicoId(Long medicoId);
+
+
     // Disponibilità per prestazione
     List<Disponibilita> findByPrestazioneId(Long prestazioneId);
 

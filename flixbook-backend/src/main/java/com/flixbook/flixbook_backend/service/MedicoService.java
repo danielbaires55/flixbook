@@ -17,10 +17,11 @@ public class MedicoService {
     /**
      * Trova un medico tramite la sua email.
      * @param email L'indirizzo email del medico.
-     * @return Il medico trovato o null se non esiste.
+     * @return Un Optional<Medico> che può contenere il medico trovato.
      */
-    public Medico findByEmail(String email) {
-        return medicoRepository.findByEmail(email).orElse(null);
+    public Optional<Medico> findMedicoByEmail(String email) {
+        // Chiama il repository che già restituisce un Optional
+        return medicoRepository.findByEmail(email);
     }
     
     /**

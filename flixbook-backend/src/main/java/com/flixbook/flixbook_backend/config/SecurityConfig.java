@@ -39,20 +39,27 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
-                        // Endpoint pubblici che non richiedono autenticazione
+                        // Endpoint di autenticazione sono sempre pubblici
                         .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers("/api/specialita/**").permitAll()
-                        .requestMatchers("/api/prestazioni/**").permitAll()
-                        .requestMatchers("/api/disponibilita/**").permitAll()
+                        
+                        // Endpoint pubblici che non richiedono autenticazione
+                        // Questi sono accessibili a chiunque, inclusi pazienti non loggati
+                        .requestMatchers("/api/specialita", "/api/prestazioni").permitAll()
+                        .requestMatchers("/api/disponibilita/available").permitAll()
                         .requestMatchers("/api/medici/info/**").permitAll()
-                        .requestMatchers("/api/pazienti/info/**").permitAll()
+                          // --> Aggiungi questa riga per rendere l'endpoint pubblico <--
+                        .requestMatchers("/api/disponibilita/**").permitAll()
+                        // Ora anche l'endpoint per le prestazioni per specialità è pubblico
+                        .requestMatchers("/api/prestazioni/bySpecialita/**").permitAll()
+
                         // Endpoint protetti con ruoli specifici
+                        .requestMatchers("/api/prestazioni/by-medico-loggato").hasRole("MEDICO")
                         .requestMatchers("/api/medici/**").hasRole("MEDICO")
                         .requestMatchers("/api/pazienti/**").hasRole("PAZIENTE")
+                        
                         // Tutte le altre richieste devono essere autenticate
                         .anyRequest().authenticated())
                 .authenticationProvider(authenticationProvider())
-                // Aggiungiamo il filtro JWT prima del filtro standard di Spring
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

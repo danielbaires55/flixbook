@@ -28,3 +28,7 @@ export interface Paziente {
   telefono: string;
 }
 
+export interface Prestazione {
+  id: number;
+  nome: string;
+}

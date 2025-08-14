@@ -72,7 +72,8 @@ const BookingCalendar: React.FC = () => {
   useEffect(() => {
     if (selectedPrestazioneId) {
       setLoading(true);
-      let url = `${API_BASE_URL}/disponibilita?prestazioneId=${selectedPrestazioneId}`;
+      // L'URL corretto per l'endpoint pubblico delle disponibilità
+      let url = `${API_BASE_URL}/disponibilita/available?prestazioneId=${selectedPrestazioneId}`;
       if (selectedMedicoId) {
         url += `&medicoId=${selectedMedicoId}`;
       }

@@ -42,5 +42,5 @@ public class Paziente {
 
     private String cap;
     
-    private final String ruolo = "ROLE_PAZIENTE";
+    private String ruolo = "ROLE_PAZIENTE";
 }

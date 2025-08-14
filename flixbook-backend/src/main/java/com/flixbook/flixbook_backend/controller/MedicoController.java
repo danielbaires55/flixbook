@@ -25,7 +25,8 @@ public class MedicoController {
         String email = userDetails.getUsername();
 
         // Usa l'email per trovare il medico nel database
-        Medico medico = medicoService.findByEmail(email);
+        Medico medico = medicoService.findMedicoByEmail(email)
+                .orElse(null);
 
         if (medico != null) {
             return ResponseEntity.ok(medico);

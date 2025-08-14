@@ -11,7 +11,9 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 
 @Service
 public class DisponibilitaService {
@@ -26,14 +28,12 @@ public class DisponibilitaService {
     private PrestazioneRepository prestazioneRepository;
 
     public Disponibilita createDisponibilita(Long medicoId, Long prestazioneId, LocalDate data, LocalTime oraInizio, LocalTime oraFine) {
-        // Verifica che medico e prestazione esistano
         Medico medico = medicoRepository.findById(medicoId)
                 .orElseThrow(() -> new NoSuchElementException("Medico non trovato con ID: " + medicoId));
 
         Prestazione prestazione = prestazioneRepository.findById(prestazioneId)
                 .orElseThrow(() -> new NoSuchElementException("Prestazione non trovata con ID: " + prestazioneId));
 
-        // Crea e salva l'entità Disponibilita
         Disponibilita disponibilita = new Disponibilita();
         disponibilita.setMedico(medico);
         disponibilita.setPrestazione(prestazione);
@@ -43,5 +43,28 @@ public class DisponibilitaService {
         disponibilita.setPrenotato(false);
 
         return disponibilitaRepository.save(disponibilita);
+    }
+    
+    // --- Metodi per il recupero delle disponibilità ---
+
+    // Questo è il metodo che mancava!
+    public List<Disponibilita> getDisponibilitaByMedicoId(Long medicoId) {
+        return disponibilitaRepository.findByMedicoId(medicoId);
+    }
+
+    public List<Disponibilita> getDisponibilitaByPrestazione(Long prestazioneId) {
+        return disponibilitaRepository.findByPrestazioneId(prestazioneId);
+    }
+
+    public List<Disponibilita> getDisponibilitaByPrestazioneAndMedico(Long prestazioneId, Long medicoId) {
+        return disponibilitaRepository.findByPrestazioneIdAndMedicoId(prestazioneId, medicoId);
+    }
+
+    public List<Disponibilita> getFutureDisponibilitaByPrestazione(Long prestazioneId) {
+        return disponibilitaRepository.findFutureByPrestazione(prestazioneId, LocalDate.now());
+    }
+
+    public List<Disponibilita> getFutureDisponibilitaByPrestazioneAndMedico(Long prestazioneId, Long medicoId) {
+        return disponibilitaRepository.findFutureByPrestazioneAndMedico(prestazioneId, medicoId, LocalDate.now());
     }
 }

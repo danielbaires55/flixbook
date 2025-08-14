@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 import type { Medico } from '../types/types';
+
+// La funzione per recuperare il profilo del medico rimane invariata
 const fetchMedicoProfile = async () => {
     const token = localStorage.getItem('jwtToken');
     if (!token) {
-        // Puoi reindirizzare l'utente al login qui
         console.error('Nessun token JWT trovato.');
         return null;
     }
@@ -23,16 +25,21 @@ const fetchMedicoProfile = async () => {
 };
 
 const MedicoDashboard = () => {
- 
-const [profile, setProfile] = useState<Medico | null>(null);
-    // useEffect esegue la funzione una volta che il componente è montato
+    const [profile, setProfile] = useState<Medico | null>(null);
+    const navigate = useNavigate();
+
     useEffect(() => {
         const getProfile = async () => {
             const data = await fetchMedicoProfile();
             setProfile(data);
         };
         getProfile();
-    }, []); // L'array vuoto assicura che venga eseguito una sola volta
+    }, []);
+
+    const handleRedirectToCreate = () => {
+        // Usa `Maps` per reindirizzare al form di creazione disponibilità
+        navigate('/medico/create-disponibilita');
+    };
 
     if (!profile) {
         return <div>Caricamento profilo...</div>;
@@ -42,7 +49,11 @@ const [profile, setProfile] = useState<Medico | null>(null);
         <div>
             <h1>Dashboard Medico</h1>
             <p>Benvenuto, {profile.nome} {profile.cognome}</p>
-            {/* Ora TypeScript sa che profile ha le proprietà nome e cognome */}
+            {/* Aggiungi un pulsante per reindirizzare */}
+            <button onClick={handleRedirectToCreate}>
+                Crea Nuova Disponibilità
+            </button>
+            {/* Qui potresti aggiungere altri componenti, come la lista delle sue disponibilità */}
         </div>
     );
 };
