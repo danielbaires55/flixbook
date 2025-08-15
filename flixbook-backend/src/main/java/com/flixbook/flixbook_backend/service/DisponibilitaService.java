@@ -7,6 +7,7 @@ import com.flixbook.flixbook_backend.repository.DisponibilitaRepository;
 import com.flixbook.flixbook_backend.repository.MedicoRepository;
 import com.flixbook.flixbook_backend.repository.PrestazioneRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -26,7 +27,8 @@ public class DisponibilitaService {
     @Autowired
     private PrestazioneRepository prestazioneRepository;
 
-    public Disponibilita createDisponibilita(Long medicoId, Long prestazioneId, LocalDate data, LocalTime oraInizio, LocalTime oraFine) {
+    public Disponibilita createDisponibilita(Long medicoId, Long prestazioneId, LocalDate data, LocalTime oraInizio,
+            LocalTime oraFine) {
         Medico medico = medicoRepository.findById(medicoId)
                 .orElseThrow(() -> new NoSuchElementException("Medico non trovato con ID: " + medicoId));
 
@@ -43,18 +45,29 @@ public class DisponibilitaService {
 
         return disponibilitaRepository.save(disponibilita);
     }
-    
+
     // --- Metodi per il recupero delle disponibilità ---
-    
+
     /**
-     * Recupera gli slot di disponibilità disponibili per una specifica prestazione e medico,
+     * Recupera gli slot di disponibilità disponibili per una specifica prestazione
+     * e medico,
      * escludendo le date passate e gli slot già prenotati.
      * Questo metodo usa la query personalizzata nel repository.
      * * @param prestazioneId L'ID della prestazione.
+     * 
      * @param medicoId L'ID del medico.
      * @return Una lista di slot di disponibilità disponibili.
      */
     public List<Disponibilita> getAvailableSlots(Long prestazioneId, Long medicoId) {
-        return disponibilitaRepository.findAvailableSlots(prestazioneId, medicoId);
+        return disponibilitaRepository.findAvailableSlots(prestazioneId, medicoId, LocalTime.now());
+    }
+
+    // Nuovo metodo per la pulizia automatica del database
+    @Scheduled(cron = "0 0 1 * * ?") // Esegue ogni giorno all'1:00 di notte
+    public void deleteExpiredDisponibilita() {
+        System.out.println("Avvio del task di pulizia delle disponibilità scadute...");
+        LocalDate yesterday = LocalDate.now().minusDays(1);
+        long deletedCount = disponibilitaRepository.deleteByDataBefore(yesterday);
+        System.out.println(String.format("Rimossi %d slot di disponibilità scaduti.", deletedCount));
     }
 }

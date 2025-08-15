@@ -43,7 +43,7 @@ public class AppuntamentoService {
         appuntamento.setDataEOraInizio(LocalDateTime.of(disponibilita.getData(), disponibilita.getOraInizio()));
         appuntamento.setDataEOraFine(LocalDateTime.of(disponibilita.getData(), disponibilita.getOraFine()));
         appuntamento.setTipoAppuntamento(tipo);
-        appuntamento.setStato(StatoAppuntamento.programmato);
+        appuntamento.setStato(StatoAppuntamento.confermato);
         appuntamento.setDataPrenotazione(LocalDateTime.now());
         
         // Per ora, il link per la videocall è nullo. Potrebbe essere generato in seguito.
