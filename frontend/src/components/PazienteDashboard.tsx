@@ -1,87 +1,175 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import 'bootstrap/dist/css/bootstrap.min.css';
+// import './PazienteDashboard.css';
 
-// Assicurati che 'Paziente' sia importato dal tuo file di tipi
-import type { Paziente } from '../types/types'; 
+interface Medico {
+    id: number;
+    nome: string;
+    cognome: string;
+}
+
+interface Prestazione {
+    id: number;
+    nome: string;
+    // Aggiungi altri campi di Prestazione se necessari
+}
+
+interface Disponibilita {
+    id: number;
+    data: string;
+    oraInizio: string;
+    oraFine: string;
+    medico: Medico;
+    prestazione: Prestazione; // <-- RIGA AGGIUNTA
+}
+
+interface Appuntamento {
+    id: number;
+    dataEOraInizio: string;
+    dataEOraFine: string;
+    stato: 'confermato' | 'completato' | 'annullato';
+    tipoAppuntamento: 'fisico' | 'virtuale';
+    disponibilita: Disponibilita;
+}
+
+interface PazienteProfile {
+    nome: string;
+    cognome: string;
+    email: string;
+}
 
 const API_BASE_URL = 'http://localhost:8080/api';
 
 const PazienteDashboard = () => {
-    const [profile, setProfile] = useState<Paziente | null>(null);
+    const [profile, setProfile] = useState<PazienteProfile | null>(null);
+    const [appuntamenti, setAppuntamenti] = useState<Appuntamento[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
+    const navigate = useNavigate();
 
     useEffect(() => {
-        const fetchPazienteProfile = async () => {
-            const token = localStorage.getItem('jwtToken');
-            if (!token) {
-                setError('Nessun token JWT trovato. Effettua il login.');
-                setLoading(false);
-                return;
-            }
+        const token = localStorage.getItem('jwtToken');
+        if (!token) {
+            navigate('/login');
+            return;
+        }
 
+        const fetchAllData = async () => {
+            setLoading(true);
             try {
-                const response = await axios.get<Paziente>(`${API_BASE_URL}/pazienti/profile`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
+                const profileResponse = await axios.get(`${API_BASE_URL}/pazienti/profile`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
-                setProfile(response.data);
+                setProfile(profileResponse.data);
+
+                const appuntamentiResponse = await axios.get(`${API_BASE_URL}/appuntamenti/paziente`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                setAppuntamenti(appuntamentiResponse.data);
             } catch (err) {
-                console.error('Errore nel recupero dei dati protetti:', err);
-                setError('Impossibile caricare il profilo. Riprova più tardi.');
+                console.error('Errore nel recupero dei dati:', err);
+                setError('Impossibile caricare i dati. Riprova più tardi.');
             } finally {
                 setLoading(false);
             }
         };
 
-        fetchPazienteProfile();
-    }, []);
+        fetchAllData();
+    }, [navigate]);
+
+    const handleAnnulla = async (appuntamentoId: number) => {
+        if (!window.confirm("Sei sicuro di voler annullare questo appuntamento?")) {
+            return;
+        }
+
+        const token = localStorage.getItem('jwtToken');
+        try {
+            await axios.put(`${API_BASE_URL}/appuntamenti/annulla/${appuntamentoId}`, null, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            alert("Appuntamento annullato con successo!");
+            
+            const updatedAppuntamenti = appuntamenti.map(app => 
+                app.id === appuntamentoId ? { ...app, stato: 'annullato' as const } : app
+            );
+            setAppuntamenti(updatedAppuntamenti);
+
+        } catch (err) {
+            console.error("Errore nell'annullamento dell'appuntamento", err);
+            if (axios.isAxiosError(err) && err.response) {
+                alert(`Errore: ${err.response.data}`);
+            } else {
+                alert("Errore nell'annullamento. Riprova.");
+            }
+        }
+    };
 
     if (loading) {
-        return <div className="text-center mt-5">Caricamento profilo paziente...</div>;
+        return <div className="text-center mt-5">Caricamento dati...</div>;
     }
 
     if (error) {
         return <div className="alert alert-danger mt-5">{error}</div>;
     }
 
-    if (!profile) {
-        return <div className="alert alert-info mt-5">Nessun profilo trovato.</div>;
-    }
-
     return (
         <div className="container mt-5">
-            <div className="row justify-content-center">
-                <div className="col-md-8">
-                    <div className="card shadow-sm">
-                        <div className="card-body text-center">
-                            <h1 className="card-title">Benvenuto, {profile.nome}!</h1>
-                            <p className="card-text text-muted">
-                                Dashboard personale del paziente
-                            </p>
-                            <hr />
-                            <div className="mt-4">
-                                <h4>Le tue informazioni</h4>
-                                <ul className="list-group list-group-flush text-start">
+            <h1 className="text-center mb-4">Dashboard Paziente</h1>
+            <div className="row">
+                {/* Sezione Profilo Paziente */}
+                <div className="col-md-6 mb-4">
+                    <div className="card shadow-sm h-100">
+                        <div className="card-body">
+                            <h4 className="card-title text-center">Le tue informazioni </h4>
+                            {profile && (
+                                <ul className="list-group list-group-flush text-start mt-3">
                                     <li className="list-group-item"><strong>Nome:</strong> {profile.nome}</li>
                                     <li className="list-group-item"><strong>Cognome:</strong> {profile.cognome}</li>
                                     <li className="list-group-item"><strong>Email:</strong> {profile.email}</li>
-                                    {/* Aggiungi altri campi del profilo qui */}
                                 </ul>
-                            </div>
-
-                            <div className="mt-5">
-                                <h4 className="mb-3">Vuoi prenotare un nuovo appuntamento?</h4>
-                                <p>Esplora le specialità disponibili e trova l'orario perfetto per te.</p>
-                                
-                                {/* Bottone che reindirizza al BookingCalendar */}
-                                <Link to="/prenota-appuntamento" className="btn btn-primary btn-lg">
+                            )}
+                            <div className="mt-4 text-center">
+                                <Link to="/prenota-appuntamento" className="btn btn-primary">
                                     Prenota un Appuntamento
                                 </Link>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Sezione Appuntamenti */}
+                <div className="col-md-6 mb-4">
+                    <div className="card shadow-sm h-100">
+                        <div className="card-body">
+                            <h4 className="card-title text-center">I tuoi appuntamenti </h4>
+                            {appuntamenti.length > 0 ? (
+                                <ul className="list-group list-group-flush mt-3">
+                                    {appuntamenti.map(app => (
+                                        <li key={app.id} className="list-group-item d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <strong>{new Date(app.dataEOraInizio).toLocaleDateString()}</strong> alle <strong>{new Date(app.dataEOraInizio).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</strong>
+                                                <br />
+                                                <small className="text-muted">Dr. {app.disponibilita.medico.nome} {app.disponibilita.medico.cognome}</small>
+                                                <br />
+                                                <small className="text-muted">Prestazione: {app.disponibilita.prestazione.nome}</small> {/* <-- RIGA AGGIUNTA */}
+                                                <br />
+                                                <span className={`badge ${app.stato === 'confermato' ? 'bg-success' : app.stato === 'completato' ? 'bg-secondary' : 'bg-danger'}`}>
+                                                    {app.stato}
+                                                </span>
+                                            </div>
+                                            {app.stato === 'confermato' && (
+                                                <button className="btn btn-danger btn-sm" onClick={() => handleAnnulla(app.id)}>
+                                                    Annulla
+                                                </button>
+                                            )}
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <div className="alert alert-info text-center mt-3">Nessun appuntamento trovato.</div>
+                            )}
                         </div>
                     </div>
                 </div>

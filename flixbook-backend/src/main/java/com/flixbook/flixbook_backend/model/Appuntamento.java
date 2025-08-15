@@ -2,6 +2,7 @@ package com.flixbook.flixbook_backend.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import java.time.LocalDateTime;
 
@@ -15,10 +16,12 @@ public class Appuntamento {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     @JoinColumn(name = "paziente_id", nullable = false)
     private Paziente paziente;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     @JoinColumn(name = "disponibilita_id", nullable = false)
     private Disponibilita disponibilita;
 

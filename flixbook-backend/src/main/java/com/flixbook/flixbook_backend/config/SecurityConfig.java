@@ -55,7 +55,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/medici/**").hasRole("MEDICO")
                         
                         // Ruoli unificati per il Paziente
-                        .requestMatchers("/api/pazienti/**", "/api/appuntamenti/**").hasRole("PAZIENTE")
+                        .requestMatchers("/api/pazienti/**", "/api/appuntamenti/**").hasAuthority("ROLE_PAZIENTE")
                         
                         // Tutte le altre richieste devono essere autenticate
                         .anyRequest().authenticated())
