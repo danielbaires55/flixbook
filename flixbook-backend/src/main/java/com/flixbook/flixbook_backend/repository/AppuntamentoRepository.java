@@ -19,4 +19,7 @@ public interface AppuntamentoRepository extends JpaRepository<Appuntamento, Long
 
     @Query("SELECT a FROM Appuntamento a WHERE a.paziente.email = :email")
     List<Appuntamento> findByPazienteEmail(@Param("email") String email);
+
+    // Nuovo metodo per trovare gli appuntamenti in base all'email del medico
+    List<Appuntamento> findByDisponibilita_Medico_Email(String medicoEmail);
 }

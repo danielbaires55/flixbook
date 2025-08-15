@@ -13,7 +13,6 @@ interface Medico {
 interface Prestazione {
     id: number;
     nome: string;
-    // Aggiungi altri campi di Prestazione se necessari
 }
 
 interface Disponibilita {
@@ -22,7 +21,7 @@ interface Disponibilita {
     oraInizio: string;
     oraFine: string;
     medico: Medico;
-    prestazione: Prestazione; // <-- RIGA AGGIUNTA
+    prestazione: Prestazione;
 }
 
 interface Appuntamento {
@@ -32,6 +31,7 @@ interface Appuntamento {
     stato: 'confermato' | 'completato' | 'annullato';
     tipoAppuntamento: 'fisico' | 'virtuale';
     disponibilita: Disponibilita;
+    linkVideocall?: string; // <-- RIGA AGGIUNTA
 }
 
 interface PazienteProfile {
@@ -118,7 +118,6 @@ const PazienteDashboard = () => {
         <div className="container mt-5">
             <h1 className="text-center mb-4">Dashboard Paziente</h1>
             <div className="row">
-                {/* Sezione Profilo Paziente */}
                 <div className="col-md-6 mb-4">
                     <div className="card shadow-sm h-100">
                         <div className="card-body">
@@ -139,7 +138,6 @@ const PazienteDashboard = () => {
                     </div>
                 </div>
 
-                {/* Sezione Appuntamenti */}
                 <div className="col-md-6 mb-4">
                     <div className="card shadow-sm h-100">
                         <div className="card-body">
@@ -153,11 +151,28 @@ const PazienteDashboard = () => {
                                                 <br />
                                                 <small className="text-muted">Dr. {app.disponibilita.medico.nome} {app.disponibilita.medico.cognome}</small>
                                                 <br />
-                                                <small className="text-muted">Prestazione: {app.disponibilita.prestazione.nome}</small> {/* <-- RIGA AGGIUNTA */}
+                                                <small className="text-muted">Prestazione: {app.disponibilita.prestazione.nome}</small>
                                                 <br />
                                                 <span className={`badge ${app.stato === 'confermato' ? 'bg-success' : app.stato === 'completato' ? 'bg-secondary' : 'bg-danger'}`}>
                                                     {app.stato}
                                                 </span>
+                                                {/* <-- LOGICA PER IL PULSANTE VIDEOCALL --> */}
+                                                {app.tipoAppuntamento === 'virtuale' && app.stato === 'confermato' && app.linkVideocall && (
+                                                    <div className="mt-2">
+                                                        <a 
+                                                            href={app.linkVideocall} 
+                                                            target="_blank" 
+                                                            rel="noopener noreferrer" 
+                                                            className="btn btn-sm btn-info"
+                                                        >
+                                                            Vai alla Videocall
+                                                        </a>
+                                                        {/* MESSAGGIO INFORMATIVO AGGIUNTO */}
+                                                        <p className="mt-2 text-info">
+                                                            Una volta entrato, potresti dover attendere l'approvazione del medico.
+                                                        </p>
+                                                    </div>
+                                                )}
                                             </div>
                                             {app.stato === 'confermato' && (
                                                 <button className="btn btn-danger btn-sm" onClick={() => handleAnnulla(app.id)}>

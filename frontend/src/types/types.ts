@@ -32,3 +32,14 @@ export interface Prestazione {
   id: number;
   nome: string;
 }
+
+export interface Appuntamento {
+  id: number;
+  paziente: Paziente;
+  disponibilita: Disponibilita;
+  dataEOraInizio: string;
+  dataEOraFine: string;
+  stato: 'confermato' | 'completato' | 'annullato';
+  tipoAppuntamento: 'in presenza' | 'virtuale';
+  linkVideocall?: string;
+}

@@ -39,36 +39,44 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(authorize -> authorize
-                        // Endpoint pubblici che non richiedono autenticazione
-                        .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers("/api/pazienti/register").permitAll()
-                        .requestMatchers(
-                                "/api/specialita/**",
-                                "/api/prestazioni/bySpecialita/**",
-                                "/api/medici/info/**",
-                                "/api/medici/byPrestazione/**", // Aggiunto qui
-                                "/api/disponibilita/**"
-                        ).permitAll()
+               .authorizeHttpRequests(authorize -> authorize
+    // Endpoint pubblici che non richiedono autenticazione
+    .requestMatchers("/api/auth/**").permitAll()
+    .requestMatchers("/api/pazienti/register").permitAll()
+    .requestMatchers(
+        "/api/specialita/**",
+        "/api/prestazioni/bySpecialita/**",
+        "/api/medici/info/**",
+        "/api/medici/byPrestazione/**",
+        "/api/disponibilita/**"
+    ).permitAll()
 
-                        // Endpoint protetti con ruoli specifici
-                        .requestMatchers("/api/medici/**").hasRole("MEDICO")
-                        
-                        // Ruoli unificati per il Paziente
-                        .requestMatchers("/api/pazienti/**", "/api/appuntamenti/**").hasAuthority("ROLE_PAZIENTE")
-                        
-                        // Tutte le altre richieste devono essere autenticate
-                        .anyRequest().authenticated())
-                .authenticationProvider(authenticationProvider())
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+    // Endpoint specifici per i pazienti
+    .requestMatchers(
+        "/api/pazienti/**",
+        "/api/appuntamenti/prenota",
+        "/api/appuntamenti/paziente/**",
+        "/api/appuntamenti/annulla/**"
+    ).hasAuthority("ROLE_PAZIENTE")
 
-        return http.build();
+    // Endpoint specifici per i medici
+    .requestMatchers(
+        "/api/medici/**",
+        "/api/appuntamenti/medico/**"
+    ).hasAuthority("ROLE_MEDICO")
+
+    // Tutte le altre richieste devono essere autenticate
+    .anyRequest().authenticated())
+    .authenticationProvider(authenticationProvider())
+    .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+
+return http.build();
     }
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:5173"));
+        configuration.setAllowedOrigins(List.of("http://localhost:5173", "http://localhost:5174"));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);

@@ -14,7 +14,7 @@ import java.util.Date;
 public class JwtUtil {
     private final String SECRET = "94bdd653f4c5a6611ec3457ad7fec93a84ab795ba38bee7d152e31264b4b716c";
     private final Key key = Keys.hmacShaKeyFor(SECRET.getBytes());
-    private final long JWT_EXPIRATION = 600000;
+    private final long JWT_EXPIRATION = 3600000; //1 ora
 
     private final CustomUserDetailsService customUserDetailsService;
 
