@@ -12,9 +12,9 @@ import java.util.Date;
 
 @Component
 public class JwtUtil {
-    private final String SECRET = "3ec71e5b3cb84bcb67c6fb14b5b5d7d932a4376cf4d3ad2cc9e5cd6b513e6610";
+    private final String SECRET = "94bdd653f4c5a6611ec3457ad7fec93a84ab795ba38bee7d152e31264b4b716c";
     private final Key key = Keys.hmacShaKeyFor(SECRET.getBytes());
-    private final long JWT_EXPIRATION = 60000;
+    private final long JWT_EXPIRATION = 240000;
 
     private final CustomUserDetailsService customUserDetailsService;
 
@@ -26,13 +26,13 @@ public class JwtUtil {
     public String generateToken(String email) {
         // Recupera i dettagli dell'utente per ottenere il ruolo
         UserDetails userDetails = customUserDetailsService.loadUserByUsername(email);
-        
+
         // Estrai il ruolo e rimuovi il prefisso "ROLE_"
         String userRole = userDetails.getAuthorities().stream()
-                                    .findFirst()
-                                    .map(GrantedAuthority::getAuthority)
-                                    .orElse("UNKNOWN_ROLE")
-                                    .replace("ROLE_", "");
+                .findFirst()
+                .map(GrantedAuthority::getAuthority)
+                .orElse("UNKNOWN_ROLE")
+                .replace("ROLE_", "");
 
         return Jwts.builder()
                 .setSubject(email)
@@ -40,7 +40,7 @@ public class JwtUtil {
                 .claim("role", userRole)
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + JWT_EXPIRATION))
-                .signWith(key, SignatureAlgorithm.HS512)
+                .signWith(key, SignatureAlgorithm.HS256)
                 .compact();
     }
 

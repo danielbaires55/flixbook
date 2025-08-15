@@ -40,4 +40,13 @@ public class MedicoService {
     public List<Medico> findAll() {
         return medicoRepository.findAll();
     }
+        /**
+         * Restituisce tutti i medici associati a una prestazione specifica.
+         * @param prestazioneId L'ID della prestazione.
+         * @return Una lista di medici associati alla prestazione.
+         */
+       public List<Medico> findMediciByPrestazioneId(Long prestazioneId) {
+        return medicoRepository.findMediciByPrestazioneId(prestazioneId);
+    }
+
 }

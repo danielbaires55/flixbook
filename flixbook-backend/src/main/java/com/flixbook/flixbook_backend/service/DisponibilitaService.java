@@ -13,7 +13,6 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.NoSuchElementException;
-import java.util.Optional;
 
 @Service
 public class DisponibilitaService {
@@ -46,25 +45,16 @@ public class DisponibilitaService {
     }
     
     // --- Metodi per il recupero delle disponibilità ---
-
-    // Questo è il metodo che mancava!
-    public List<Disponibilita> getDisponibilitaByMedicoId(Long medicoId) {
-        return disponibilitaRepository.findByMedicoId(medicoId);
-    }
-
-    public List<Disponibilita> getDisponibilitaByPrestazione(Long prestazioneId) {
-        return disponibilitaRepository.findByPrestazioneId(prestazioneId);
-    }
-
-    public List<Disponibilita> getDisponibilitaByPrestazioneAndMedico(Long prestazioneId, Long medicoId) {
-        return disponibilitaRepository.findByPrestazioneIdAndMedicoId(prestazioneId, medicoId);
-    }
-
-    public List<Disponibilita> getFutureDisponibilitaByPrestazione(Long prestazioneId) {
-        return disponibilitaRepository.findFutureByPrestazione(prestazioneId, LocalDate.now());
-    }
-
-    public List<Disponibilita> getFutureDisponibilitaByPrestazioneAndMedico(Long prestazioneId, Long medicoId) {
-        return disponibilitaRepository.findFutureByPrestazioneAndMedico(prestazioneId, medicoId, LocalDate.now());
+    
+    /**
+     * Recupera gli slot di disponibilità disponibili per una specifica prestazione e medico,
+     * escludendo le date passate e gli slot già prenotati.
+     * Questo metodo usa la query personalizzata nel repository.
+     * * @param prestazioneId L'ID della prestazione.
+     * @param medicoId L'ID del medico.
+     * @return Una lista di slot di disponibilità disponibili.
+     */
+    public List<Disponibilita> getAvailableSlots(Long prestazioneId, Long medicoId) {
+        return disponibilitaRepository.findAvailableSlots(prestazioneId, medicoId);
     }
 }

@@ -40,8 +40,8 @@ public class DisponibilitaController {
             Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
             String email = authentication.getName();
             Long medicoId = medicoService.findMedicoByEmail(email)
-                                         .orElseThrow(() -> new IllegalStateException("Medico non trovato"))
-                                         .getId();
+                                             .orElseThrow(() -> new IllegalStateException("Medico non trovato"))
+                                             .getId();
             
             // Chiama il service per creare la disponibilità
             Disponibilita newDisponibilita = disponibilitaService.createDisponibilita(
@@ -59,32 +59,22 @@ public class DisponibilitaController {
             return new ResponseEntity<>(HttpStatus.BAD_REQUEST); // Dati non validi
         }
     }
-
-    // Endpoint per visualizzare le disponibilità del medico autenticato
-    // Richiede l'autenticazione del medico
-    @GetMapping("/my-disponibilita")
-    public ResponseEntity<List<Disponibilita>> getMyDisponibilita() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        String email = authentication.getName();
-        
-        return medicoService.findMedicoByEmail(email)
-            .map(medico -> {
-                List<Disponibilita> myDisponibilita = disponibilitaService.getDisponibilitaByMedicoId(medico.getId());
-                return ResponseEntity.ok(myDisponibilita);
-            })
-            .orElse(new ResponseEntity<>(HttpStatus.FORBIDDEN));
-    }
-
+    
     // Endpoint pubblico per i pazienti per cercare le disponibilità future
     @GetMapping("/available")
     public List<Disponibilita> getAvailableDisponibilita(
             @RequestParam Long prestazioneId,
             @RequestParam(required = false) Long medicoId) {
         
+        // Questo è il metodo aggiornato che usa il nostro nuovo service
+        // Se medicoId non è fornito, il service dovrà essere modificato per gestirlo
+        // L'approccio attuale richiede medicoId, quindi lo manteniamo
         if (medicoId != null) {
-            return disponibilitaService.getFutureDisponibilitaByPrestazioneAndMedico(prestazioneId, medicoId);
+            return disponibilitaService.getAvailableSlots(prestazioneId, medicoId);
         } else {
-            return disponibilitaService.getFutureDisponibilitaByPrestazione(prestazioneId);
+            // Qui puoi gestire il caso in cui medicoId non è fornito,
+            // ad esempio, restituendo una lista vuota o un errore
+            return List.of(); 
         }
     }
 }

@@ -14,11 +14,11 @@ public class Appuntamento {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(optional = false)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "paziente_id", nullable = false)
     private Paziente paziente;
 
-    @ManyToOne(optional = false)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "disponibilita_id", nullable = false)
     private Disponibilita disponibilita;
 
@@ -36,21 +36,9 @@ public class Appuntamento {
     private String linkVideocall;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private StatoAppuntamento stato = StatoAppuntamento.PROGRAMMATO;
+    @Column(name = "stato", nullable = false)
+    private StatoAppuntamento stato;
 
     @Column(name = "data_prenotazione", nullable = false)
     private LocalDateTime dataPrenotazione;
-
-    public enum TipoAppuntamento {
-        VIRTUALE,
-        FISICO
-    }
-
-    public enum StatoAppuntamento {
-        PROGRAMMATO,
-        CONFERMATO,
-        COMPLETATO,
-        ANNULLATO
-    }
 }

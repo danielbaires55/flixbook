@@ -4,10 +4,10 @@ import 'react-calendar/dist/Calendar.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import axios from 'axios';
 import './BookingCalendar.css';
+import { useNavigate } from 'react-router-dom';
 
 const API_BASE_URL = 'http://localhost:8080/api';
 
-// Definizione dei tipi di dato per la risposta del backend
 interface Specialita {
   id: number;
   nome: string;
@@ -18,48 +18,51 @@ interface Prestazione {
   nome: string;
 }
 
+interface Medico {
+  id: number;
+  nome: string;
+  cognome: string;
+}
+
 interface Disponibilita {
   id: number;
   data: string;
   oraInizio: string;
   oraFine: string;
-  medico: {
-    id: number;
-    nome: string;
-    cognome: string;
-  };
+  medico: Medico;
 }
 
 const BookingCalendar: React.FC = () => {
   const [specialitaList, setSpecialitaList] = useState<Specialita[]>([]);
   const [prestazioniList, setPrestazioniList] = useState<Prestazione[]>([]);
-  const [mediciList, setMediciList] = useState<Disponibilita['medico'][]>([]);
+  const [mediciList, setMediciList] = useState<Medico[]>([]);
   const [disponibilitaList, setDisponibilitaList] = useState<Disponibilita[]>([]);
-  
   const [selectedSpecialitaId, setSelectedSpecialitaId] = useState<string>('');
   const [selectedPrestazioneId, setSelectedPrestazioneId] = useState<string>('');
   const [selectedMedicoId, setSelectedMedicoId] = useState<string>('');
-  
   const [date, setDate] = useState<Date>(new Date());
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const navigate = useNavigate();
 
-  // useEffect 1: Carica tutte le specialità all'avvio
+  // 1. Recupera la lista delle specialità al caricamento
   useEffect(() => {
     axios.get<Specialita[]>(`${API_BASE_URL}/specialita`)
       .then(response => setSpecialitaList(response.data))
       .catch(error => console.error("Errore nel recupero delle specialità", error));
   }, []);
 
-  // useEffect 2: Carica le prestazioni quando la specialità cambia
+  // 2. Recupera la lista delle prestazioni quando la specialità cambia
   useEffect(() => {
     if (selectedSpecialitaId) {
       setLoading(true);
       axios.get<Prestazione[]>(`${API_BASE_URL}/prestazioni/bySpecialita/${selectedSpecialitaId}`)
         .then(response => {
           setPrestazioniList(response.data);
-          setDisponibilitaList([]);
           setMediciList([]);
+          setDisponibilitaList([]);
           setSelectedPrestazioneId('');
           setSelectedMedicoId('');
         })
@@ -68,23 +71,33 @@ const BookingCalendar: React.FC = () => {
     }
   }, [selectedSpecialitaId]);
 
-  // useEffect 3: Carica le disponibilità quando la prestazione (o il medico) cambia
+  // 3. Recupera la lista dei medici quando la prestazione cambia
+  // Questo risolve il problema principale che avevi segnalato.
   useEffect(() => {
     if (selectedPrestazioneId) {
       setLoading(true);
-      // L'URL corretto per l'endpoint pubblico delle disponibilità
-      let url = `${API_BASE_URL}/disponibilita/available?prestazioneId=${selectedPrestazioneId}`;
-      if (selectedMedicoId) {
-        url += `&medicoId=${selectedMedicoId}`;
-      }
+      axios.get<Medico[]>(`${API_BASE_URL}/medici/byPrestazione/${selectedPrestazioneId}`)
+        .then(response => {
+          setMediciList(response.data);
+          setDisponibilitaList([]);
+          setAvailableDates([]);
+          setSelectedMedicoId('');
+        })
+        .catch(error => console.error("Errore nel recupero dei medici", error))
+        .finally(() => setLoading(false));
+    } else {
+      setMediciList([]);
+    }
+  }, [selectedPrestazioneId]);
 
+  // 4. Recupera le disponibilità solo quando sono stati selezionati sia prestazione che medico
+  useEffect(() => {
+    if (selectedPrestazioneId && selectedMedicoId) {
+      setLoading(true);
+      const url = `${API_BASE_URL}/disponibilita/available?prestazioneId=${selectedPrestazioneId}&medicoId=${selectedMedicoId}`;
       axios.get<Disponibilita[]>(url)
         .then(response => {
           setDisponibilitaList(response.data);
-          
-          const uniqueMedici = [...new Map(response.data.map(item => [item.medico.id, item.medico])).values()];
-          setMediciList(uniqueMedici);
-
           const dates = response.data.map(slot => slot.data);
           setAvailableDates(dates);
         })
@@ -92,7 +105,6 @@ const BookingCalendar: React.FC = () => {
         .finally(() => setLoading(false));
     } else {
       setDisponibilitaList([]);
-      setMediciList([]);
       setAvailableDates([]);
     }
   }, [selectedPrestazioneId, selectedMedicoId]);
@@ -108,6 +120,38 @@ const BookingCalendar: React.FC = () => {
     slot => new Date(slot.data).toDateString() === date.toDateString()
   );
 
+  const handleBooking = async (disponibilitaId: number) => {
+    setError(null);
+    setSuccess(null);
+    const token = localStorage.getItem('jwtToken');
+
+    if (!token) {
+      setError("Devi essere loggato per prenotare un appuntamento.");
+      navigate('/login');
+      return;
+    }
+
+    try {
+      const response = await axios.post(
+        `${API_BASE_URL}/appuntamenti/prenota?disponibilitaId=${disponibilitaId}&tipo=fisico`,
+        null,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+      setSuccess("Appuntamento prenotato con successo!");
+      console.log("Appuntamento prenotato:", response.data);
+    } catch (err) {
+      if (axios.isAxiosError(err) && err.response) {
+        setError(err.response.data || "Errore nella prenotazione. Riprova.");
+      } else {
+        setError("Errore di rete. Controlla la tua connessione.");
+      }
+    }
+  };
+
   return (
     <div className="container mt-5">
       <div className="row justify-content-center">
@@ -115,6 +159,8 @@ const BookingCalendar: React.FC = () => {
           <div className="card">
             <div className="card-body">
               <h1 className="card-title text-center mb-4">Prenota il tuo appuntamento</h1>
+              {error && <div className="alert alert-danger">{error}</div>}
+              {success && <div className="alert alert-success">{success}</div>}
               <div className="row g-3 mb-4">
                 <div className="col-md-4">
                   <select className="form-select" onChange={(e) => setSelectedSpecialitaId(e.target.value)} value={selectedSpecialitaId}>
@@ -141,7 +187,6 @@ const BookingCalendar: React.FC = () => {
                   </select>
                 </div>
               </div>
-
               {loading ? (
                 <div className="d-flex justify-content-center">
                   <div className="spinner-border text-primary" role="status">
@@ -157,7 +202,6 @@ const BookingCalendar: React.FC = () => {
                       tileClassName={tileClassName}
                     />
                   </div>
-
                   {selectedSlots.length > 0 && (
                     <div className="mt-4">
                       <h4 className="text-center">Disponibilità per il {date.toLocaleDateString()}</h4>
@@ -167,7 +211,7 @@ const BookingCalendar: React.FC = () => {
                             <div>
                               <strong>Dr. {slot.medico.nome} {slot.medico.cognome}</strong> - dalle {slot.oraInizio} alle {slot.oraFine}
                             </div>
-                            <button className="btn btn-primary btn-sm">Prenota</button>
+                            <button className="btn btn-primary btn-sm" onClick={() => handleBooking(slot.id)}>Prenota</button>
                           </li>
                         ))}
                       </ul>
