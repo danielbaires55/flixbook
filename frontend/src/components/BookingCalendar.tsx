@@ -16,6 +16,7 @@ interface Specialita {
 interface Prestazione {
   id: number;
   nome: string;
+  tipoPrestazione: 'fisico' | 'virtuale';
 }
 
 interface Medico {
@@ -72,7 +73,6 @@ const BookingCalendar: React.FC = () => {
   }, [selectedSpecialitaId]);
 
   // 3. Recupera la lista dei medici quando la prestazione cambia
-  // Questo risolve il problema principale che avevi segnalato.
   useEffect(() => {
     if (selectedPrestazioneId) {
       setLoading(true);
@@ -90,7 +90,7 @@ const BookingCalendar: React.FC = () => {
     }
   }, [selectedPrestazioneId]);
 
-  // 4. Recupera le disponibilità solo quando sono stati selezionati sia prestazione che medico
+  // 4. Recupera le disponibilità quando sono stati selezionati sia prestazione che medico
   useEffect(() => {
     if (selectedPrestazioneId && selectedMedicoId) {
       setLoading(true);
@@ -131,9 +131,17 @@ const BookingCalendar: React.FC = () => {
       return;
     }
 
+    // Trova la prestazione selezionata per determinare il suo tipo
+    const prestazione = prestazioniList.find(p => p.id === parseInt(selectedPrestazioneId));
+    if (!prestazione) {
+      setError("Prestazione non trovata. Impossibile prenotare.");
+      return;
+    }
+
     try {
+      // Passa il tipo di appuntamento basato sulla prestazione
       const response = await axios.post(
-        `${API_BASE_URL}/appuntamenti/prenota?disponibilitaId=${disponibilitaId}&tipo=fisico`,
+        `${API_BASE_URL}/appuntamenti/prenota?disponibilitaId=${disponibilitaId}&tipo=${prestazione.tipoPrestazione}`,
         null,
         {
           headers: {
@@ -143,6 +151,8 @@ const BookingCalendar: React.FC = () => {
       );
       setSuccess("Appuntamento prenotato con successo!");
       console.log("Appuntamento prenotato:", response.data);
+      // Reindirizza l'utente dopo la prenotazione
+      navigate('/dashboard'); 
     } catch (err) {
       if (axios.isAxiosError(err) && err.response) {
         setError(err.response.data || "Errore nella prenotazione. Riprova.");
@@ -171,12 +181,20 @@ const BookingCalendar: React.FC = () => {
                   </select>
                 </div>
                 <div className="col-md-4">
-                  <select className="form-select" onChange={(e) => setSelectedPrestazioneId(e.target.value)} value={selectedPrestazioneId} disabled={!selectedSpecialitaId}>
-                    <option value="">Seleziona prestazione</option>
-                    {prestazioniList.map(p => (
-                      <option key={p.id} value={p.id}>{p.nome}</option>
-                    ))}
-                  </select>
+                 <select
+  className="form-select"
+  onChange={(e) => setSelectedPrestazioneId(e.target.value)}
+  value={selectedPrestazioneId}
+  disabled={!selectedSpecialitaId}
+>
+  <option value="">Seleziona prestazione</option>
+  {prestazioniList.map((p) => (
+    <option key={p.id} value={p.id}>
+      {p.nome}
+      {p.tipoPrestazione === 'virtuale' && ' (Virtuale)'}
+    </option>
+  ))}
+</select>
                 </div>
                 <div className="col-md-4">
                   <select className="form-select" onChange={(e) => setSelectedMedicoId(e.target.value)} value={selectedMedicoId} disabled={!selectedPrestazioneId || mediciList.length === 0}>

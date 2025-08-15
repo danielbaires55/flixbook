@@ -23,7 +23,7 @@ public class Prestazione {
     private Double prezzo;
     private String icon_url;
 
-    // @ManyToMany(fetch = FetchType.LAZY, mappedBy = "prestazioni")
-    // @JsonIgnore
-    // private List<Medico> medici;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tipo_prestazione", nullable = false)
+    private TipoPrestazione tipoPrestazione;
 }
