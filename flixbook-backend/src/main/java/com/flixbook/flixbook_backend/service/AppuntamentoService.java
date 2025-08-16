@@ -4,8 +4,10 @@ import com.flixbook.flixbook_backend.model.*;
 import com.flixbook.flixbook_backend.repository.AppuntamentoRepository;
 import com.flixbook.flixbook_backend.repository.DisponibilitaRepository;
 import com.flixbook.flixbook_backend.repository.PazienteRepository;
+
+import jakarta.annotation.PostConstruct;
+
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -58,7 +60,7 @@ public class AppuntamentoService {
         return appuntamentoRepository.save(appuntamento);
     }
 
-    @Scheduled(cron = "0 0 1 * * ?")
+    @PostConstruct
     @Transactional
     public void updateCompletedAppointments() {
         System.out.println("Avvio del task di aggiornamento appuntamenti completati...");

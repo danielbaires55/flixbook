@@ -6,8 +6,10 @@ import com.flixbook.flixbook_backend.model.Prestazione;
 import com.flixbook.flixbook_backend.repository.DisponibilitaRepository;
 import com.flixbook.flixbook_backend.repository.MedicoRepository;
 import com.flixbook.flixbook_backend.repository.PrestazioneRepository;
+
+import jakarta.annotation.PostConstruct;
+
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -60,14 +62,5 @@ public class DisponibilitaService {
      */
     public List<Disponibilita> getAvailableSlots(Long prestazioneId, Long medicoId) {
         return disponibilitaRepository.findAvailableSlots(prestazioneId, medicoId, LocalTime.now());
-    }
-
-    // Nuovo metodo per la pulizia automatica del database
-    @Scheduled(cron = "0 0 1 * * ?") // Esegue ogni giorno all'1:00 di notte
-    public void deleteExpiredDisponibilita() {
-        System.out.println("Avvio del task di pulizia delle disponibilità scadute...");
-        LocalDate yesterday = LocalDate.now().minusDays(1);
-        long deletedCount = disponibilitaRepository.deleteByDataBefore(yesterday);
-        System.out.println(String.format("Rimossi %d slot di disponibilità scaduti.", deletedCount));
     }
 }

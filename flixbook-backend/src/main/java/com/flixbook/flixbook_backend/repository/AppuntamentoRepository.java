@@ -1,6 +1,7 @@
 package com.flixbook.flixbook_backend.repository;
 
 import com.flixbook.flixbook_backend.model.Appuntamento;
+import com.flixbook.flixbook_backend.model.Disponibilita;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -20,6 +21,8 @@ public interface AppuntamentoRepository extends JpaRepository<Appuntamento, Long
     @Query("SELECT a FROM Appuntamento a WHERE a.paziente.email = :email")
     List<Appuntamento> findByPazienteEmail(@Param("email") String email);
 
-    // Nuovo metodo per trovare gli appuntamenti in base all'email del medico
     List<Appuntamento> findByDisponibilita_Medico_Email(String medicoEmail);
+
+    // Questo è il metodo corretto per trovare gli appuntamenti basati sulla disponibilità
+    List<Appuntamento> findByDisponibilita(Disponibilita disponibilita);
 }

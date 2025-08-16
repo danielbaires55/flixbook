@@ -24,4 +24,6 @@ public interface DisponibilitaRepository extends JpaRepository<Disponibilita, Lo
 
     @Transactional
     long deleteByDataBefore(LocalDate data); // Questo metodo eliminerà gli slot con data precedente a quella passata
+    List<Disponibilita> findByDataBefore(LocalDate data);
+    
 }
