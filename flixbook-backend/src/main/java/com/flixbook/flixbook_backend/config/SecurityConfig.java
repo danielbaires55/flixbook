@@ -50,6 +50,12 @@ public class SecurityConfig {
         "/api/medici/byPrestazione/**"
     ).permitAll()
 
+    // Rendiamo pubblico l'endpoint per le disponibilità (senza costi)
+    .requestMatchers("/api/disponibilita/available").permitAll()
+
+    // Proteggiamo specificamente l'endpoint per i costi
+    .requestMatchers("/api/disponibilita/available-authenticated").hasAnyAuthority("ROLE_MEDICO", "ROLE_PAZIENTE")
+
     // Endpoint specifici per i pazienti
     .requestMatchers(
         "/api/pazienti/**",
@@ -64,6 +70,7 @@ public class SecurityConfig {
         "/api/appuntamenti/medico/**",
         "/api/disponibilita/medico"
     ).hasAuthority("ROLE_MEDICO")
+
 
     // Endpoint accessibili sia ai medici che ai pazienti
     .requestMatchers("/api/disponibilita/**").hasAnyAuthority("ROLE_MEDICO", "ROLE_PAZIENTE")

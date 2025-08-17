@@ -13,6 +13,7 @@ interface Medico {
 interface Prestazione {
     id: number;
     nome: string;
+    costo: number;
 }
 
 interface Disponibilita {
@@ -31,7 +32,7 @@ interface Appuntamento {
     stato: 'confermato' | 'completato' | 'annullato';
     tipoAppuntamento: 'fisico' | 'virtuale';
     disponibilita: Disponibilita;
-    linkVideocall?: string; // <-- RIGA AGGIUNTA
+    linkVideocall?: string; 
 }
 
 interface PazienteProfile {
@@ -152,6 +153,7 @@ const PazienteDashboard = () => {
                                                 <small className="text-muted">Dr. {app.disponibilita.medico.nome} {app.disponibilita.medico.cognome}</small>
                                                 <br />
                                                 <small className="text-muted">Prestazione: {app.disponibilita.prestazione.nome}</small>
+                                                <small className="text-muted"> Costo: {app.disponibilita.prestazione.costo}€</small>
                                                 <br />
                                                 <span className={`badge ${app.stato === 'confermato' ? 'bg-success' : app.stato === 'completato' ? 'bg-secondary' : 'bg-danger'}`}>
                                                     {app.stato}

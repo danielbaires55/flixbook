@@ -110,39 +110,41 @@ const BookingCalendar: React.FC = () => {
 
   // 4. Recupera le disponibilità quando sono stati selezionati sia prestazione che medico
   useEffect(() => {
-    if (selectedPrestazioneId && selectedMedicoId) {
-      setLoading(true);
-      const url = `${API_BASE_URL}/disponibilita/available?prestazioneId=${selectedPrestazioneId}&medicoId=${selectedMedicoId}`;
+  if (selectedPrestazioneId && selectedMedicoId) {
+    setLoading(true);
 
-      // Recupera il token
-      const token = localStorage.getItem("jwtToken");
+    const token = localStorage.getItem("jwtToken");
 
-      // Aggiungi l'header di autorizzazione solo se il token esiste
-      const config = token
-        ? { headers: { Authorization: `Bearer ${token}` } }
-        : {};
+    // Scegli l'URL in base alla presenza del token
+    const url = token
+      ? `${API_BASE_URL}/disponibilita/available-authenticated?prestazioneId=${selectedPrestazioneId}&medicoId=${selectedMedicoId}`
+      : `${API_BASE_URL}/disponibilita/available?prestazioneId=${selectedPrestazioneId}&medicoId=${selectedMedicoId}`;
 
-      axios
-        .get<Disponibilita[]>(url, config)
-        .then((response) => {
-          setDisponibilitaList(response.data);
-          const dates = response.data.map((slot) => slot.data);
-          setAvailableDates(dates);
-        })
-        .catch((error) => {
-          console.error("Errore nel recupero delle disponibilità", error);
-          // Puoi anche gestire l'errore 403 qui per reindirizzare l'utente
-          if (axios.isAxiosError(error) && error.response?.status === 403) {
-            console.log("Accesso negato. Reindirizzamento al login.");
-            navigate("/login");
-          }
-        })
-        .finally(() => setLoading(false));
-    } else {
-      setDisponibilitaList([]);
-      setAvailableDates([]);
-    }
-  }, [selectedPrestazioneId, selectedMedicoId, navigate]);
+    // Aggiungi l'header di autorizzazione solo se il token esiste
+    const config = token
+      ? { headers: { Authorization: `Bearer ${token}` } }
+      : {};
+
+    axios
+      .get<Disponibilita[]>(url, config)
+      .then((response) => {
+        setDisponibilitaList(response.data);
+        const dates = response.data.map((slot) => slot.data);
+        setAvailableDates(dates);
+      })
+      .catch((error) => {
+        console.error("Errore nel recupero delle disponibilità", error);
+        if (axios.isAxiosError(error) && error.response?.status === 403) {
+          console.log("Accesso negato. Reindirizzamento al login.");
+          navigate("/login");
+        }
+      })
+      .finally(() => setLoading(false));
+  } else {
+    setDisponibilitaList([]);
+    setAvailableDates([]);
+  }
+}, [selectedPrestazioneId, selectedMedicoId, navigate]);
 
   const tileClassName = ({ date, view }: { date: Date; view: string }) => {
     if (
