@@ -47,8 +47,7 @@ public class SecurityConfig {
         "/api/specialita/**",
         "/api/prestazioni/bySpecialita/**",
         "/api/medici/info/**",
-        "/api/medici/byPrestazione/**",
-        "/api/disponibilita/**"
+        "/api/medici/byPrestazione/**"
     ).permitAll()
 
     // Endpoint specifici per i pazienti
@@ -62,8 +61,12 @@ public class SecurityConfig {
     // Endpoint specifici per i medici
     .requestMatchers(
         "/api/medici/**",
-        "/api/appuntamenti/medico/**"
+        "/api/appuntamenti/medico/**",
+        "/api/disponibilita/medico"
     ).hasAuthority("ROLE_MEDICO")
+
+    // Endpoint accessibili sia ai medici che ai pazienti
+    .requestMatchers("/api/disponibilita/**").hasAnyAuthority("ROLE_MEDICO", "ROLE_PAZIENTE")
 
     // Tutte le altre richieste devono essere autenticate
     .anyRequest().authenticated())

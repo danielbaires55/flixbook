@@ -63,4 +63,8 @@ public class DisponibilitaService {
     public List<Disponibilita> getAvailableSlots(Long prestazioneId, Long medicoId) {
         return disponibilitaRepository.findAvailableSlots(prestazioneId, medicoId, LocalTime.now());
     }
+
+    public List<Disponibilita> getDisponibilitaByMedicoId(Long medicoId) {
+        return disponibilitaRepository.findByMedicoId(medicoId);
+    }
 }
