@@ -27,6 +27,9 @@ public class AppuntamentoService {
     @Autowired
     private PazienteRepository pazienteRepository;
 
+    @Autowired
+    private EmailService emailService;
+
     @Transactional
     public Appuntamento creaAppuntamento(Long disponibilitaId, String pazienteEmail, TipoAppuntamento tipo) {
         Disponibilita disponibilita = disponibilitaRepository.findById(disponibilitaId)
@@ -50,14 +53,38 @@ public class AppuntamentoService {
 
         if (tipo == TipoAppuntamento.virtuale) {
             String linkVideocall = "https://meet.jit.si/" + UUID.randomUUID().toString();
-            // String linkVideocall = "https://meet.jit.si/videoconsulto";
             appuntamento.setLinkVideocall(linkVideocall);
         }
 
         disponibilita.setPrenotato(true);
         disponibilitaRepository.save(disponibilita);
 
-        return appuntamentoRepository.save(appuntamento);
+        Appuntamento appuntamentoSalvato = appuntamentoRepository.save(appuntamento);
+
+        // --- INIZIO: Personalizzazione dell'email ---
+        String destinatario = paziente.getEmail();
+        String oggetto = "Conferma appuntamento: " + disponibilita.getPrestazione().getNome();
+        
+        String corpo = "Gentile " + paziente.getNome() + ",\n\n"
+                     + "Il tuo appuntamento su Flixbook è stato confermato con i seguenti dettagli:\n"
+                     + "Medico: Dr. " + disponibilita.getMedico().getNome() + " " + disponibilita.getMedico().getCognome() + "\n"
+                     + "Prestazione: " + disponibilita.getPrestazione().getNome() + "\n"
+                     + "Data: " + disponibilita.getData().toString() + "\n"
+                     + "Ora: " + disponibilita.getOraInizio().toString() + "\n"
+                     + "Tipo appuntamento: " + tipo.toString() + "\n\n";
+
+        if (tipo == TipoAppuntamento.virtuale) {
+            corpo += "Ecco il link per partecipare alla videocall: " + appuntamentoSalvato.getLinkVideocall() + "\n\n";
+        }
+
+        corpo += "Ti preghiamo di presentarti in tempo per la visita.\n\n"
+               + "Cordiali saluti,\n"
+               + "Il team di Flixbook";
+        
+        emailService.sendEmail(destinatario, oggetto, corpo);
+        // --- FINE: Personalizzazione dell'email ---
+
+        return appuntamentoSalvato;
     }
 
     @PostConstruct
