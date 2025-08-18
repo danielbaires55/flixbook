@@ -9,6 +9,7 @@ import PazienteRegistrationForm from './components/PazienteRegistrationForm'; //
 import MedicoDashboard from './components/MedicoDashboard';
 import PazienteDashboard from './components/PazienteDashboard';
 import CreateDisponibilitaForm from './components/CreateDisponibilitaForm';
+import FeedbackForm from './components/FeedbackForm';
 
 // Componente helper per proteggere le rotte
 type ProtectedRouteProps = {
@@ -86,6 +87,7 @@ function App() {
 
         {/* Rotta catch-all per reindirizzare gli URL non corrispondenti al calendario */}
         <Route path="*" element={<Navigate to="/book" />} />
+        <Route path="/feedback/:appuntamentoId" element={<FeedbackForm />} />
       </Routes>
     </BrowserRouter>
   );

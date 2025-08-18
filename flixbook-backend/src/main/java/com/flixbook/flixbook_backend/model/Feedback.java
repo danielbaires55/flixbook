@@ -2,7 +2,6 @@ package com.flixbook.flixbook_backend.model;
 
 import jakarta.persistence.*;
 import lombok.*;
-
 import java.time.LocalDateTime;
 
 @Entity
@@ -14,14 +13,13 @@ public class Feedback {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @OneToOne(optional = false)
-    @JoinColumn(name = "appuntamento_id", unique = true, nullable = false)
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "appuntamento_id", nullable = false, unique = true)
     private Appuntamento appuntamento;
 
-    @Column(nullable = false)
-    private Integer valutazione;  // valida da 1 a 5 - gestione controllo a livello DB
+    private Integer valutazione;
 
-    @Lob
+    @Lob // Annota per campi di testo lunghi
     private String commento;
 
     @Column(name = "data_feedback", nullable = false)

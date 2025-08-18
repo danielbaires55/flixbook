@@ -39,48 +39,38 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-               .authorizeHttpRequests(authorize -> authorize
-    // Endpoint pubblici che non richiedono autenticazione
-    .requestMatchers("/api/auth/**").permitAll()
-    .requestMatchers("/api/pazienti/register").permitAll()
-    .requestMatchers(
-        "/api/specialita/**",
-        "/api/prestazioni/bySpecialita/**",
-        "/api/medici/info/**",
-        "/api/medici/byPrestazione/**"
-    ).permitAll()
+                .authorizeHttpRequests(authorize -> authorize
+                // Endpoint pubblici che non richiedono autenticazione
+                .requestMatchers(
+                    "/api/auth/**",
+                    "/api/pazienti/register",
+                    "/api/specialita/**",
+                    "/api/prestazioni/bySpecialita/**",
+                    "/api/medici/info/**",
+                    "/api/medici/byPrestazione/**",
+                    "/api/disponibilita/available" // Rende solo questo specifico endpoint pubblico
+                ).permitAll()
 
-    // Rendiamo pubblico l'endpoint per le disponibilità (senza costi)
-    .requestMatchers("/api/disponibilita/available").permitAll()
+                // Endpoint specifici per i medici
+                .requestMatchers(
+                    "/api/medici/**",
+                    "/api/appuntamenti/medico/**",
+                    "/api/disponibilita/medico/**"
+                ).hasAuthority("ROLE_MEDICO")
+                
+                // Endpoint specifici per i pazienti
+                .requestMatchers(
+                    "/api/pazienti/**",
+                    "/api/appuntamenti/prenota",
+                    "/api/appuntamenti/paziente/**",
+                    "/api/appuntamenti/annulla/**"
+                ).hasAuthority("ROLE_PAZIENTE")
+                
+                .anyRequest().authenticated())
+                .authenticationProvider(authenticationProvider())
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
-    // Proteggiamo specificamente l'endpoint per i costi
-    .requestMatchers("/api/disponibilita/available-authenticated").hasAnyAuthority("ROLE_MEDICO", "ROLE_PAZIENTE")
-
-    // Endpoint specifici per i pazienti
-    .requestMatchers(
-        "/api/pazienti/**",
-        "/api/appuntamenti/prenota",
-        "/api/appuntamenti/paziente/**",
-        "/api/appuntamenti/annulla/**"
-    ).hasAuthority("ROLE_PAZIENTE")
-
-    // Endpoint specifici per i medici
-    .requestMatchers(
-        "/api/medici/**",
-        "/api/appuntamenti/medico/**",
-        "/api/disponibilita/medico"
-    ).hasAuthority("ROLE_MEDICO")
-
-
-    // Endpoint accessibili sia ai medici che ai pazienti
-    .requestMatchers("/api/disponibilita/**").hasAnyAuthority("ROLE_MEDICO", "ROLE_PAZIENTE")
-
-    // Tutte le altre richieste devono essere autenticate
-    .anyRequest().authenticated())
-    .authenticationProvider(authenticationProvider())
-    .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
-
-return http.build();
+        return http.build();
     }
 
     @Bean

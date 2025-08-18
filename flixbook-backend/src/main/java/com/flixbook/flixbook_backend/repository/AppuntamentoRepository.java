@@ -2,6 +2,7 @@ package com.flixbook.flixbook_backend.repository;
 
 import com.flixbook.flixbook_backend.model.Appuntamento;
 import com.flixbook.flixbook_backend.model.Disponibilita;
+import com.flixbook.flixbook_backend.model.StatoAppuntamento;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -27,4 +28,6 @@ public interface AppuntamentoRepository extends JpaRepository<Appuntamento, Long
     List<Appuntamento> findByDisponibilita(Disponibilita disponibilita);
     List<Appuntamento> findByDataEOraInizioBetweenAndReminderInviatoIsFalse(LocalDateTime start, LocalDateTime end);
     List<Appuntamento> findByDataEOraInizioBetweenAndReminderInviatoIsFalseAndSmsReminderInviatoIsFalse(LocalDateTime start, LocalDateTime end);
+    List<Appuntamento> findByStatoAndFeedbackInviatoIsFalse(StatoAppuntamento stato);
+
 }
