@@ -26,4 +26,5 @@ public interface AppuntamentoRepository extends JpaRepository<Appuntamento, Long
     // Questo è il metodo corretto per trovare gli appuntamenti basati sulla disponibilità
     List<Appuntamento> findByDisponibilita(Disponibilita disponibilita);
     List<Appuntamento> findByDataEOraInizioBetweenAndReminderInviatoIsFalse(LocalDateTime start, LocalDateTime end);
+    List<Appuntamento> findByDataEOraInizioBetweenAndReminderInviatoIsFalseAndSmsReminderInviatoIsFalse(LocalDateTime start, LocalDateTime end);
 }

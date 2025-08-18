@@ -30,6 +30,9 @@ public class AppuntamentoService {
     @Autowired
     private EmailService emailService;
 
+    @Autowired
+    private SmsService smsService;
+
     @Transactional
     public Appuntamento creaAppuntamento(Long disponibilitaId, String pazienteEmail, TipoAppuntamento tipo) {
         Disponibilita disponibilita = disponibilitaRepository.findById(disponibilitaId)
@@ -84,6 +87,22 @@ public class AppuntamentoService {
         emailService.sendEmail(destinatario, oggetto, corpo);
         // --- FINE: Personalizzazione dell'email ---
 
+        // --- INIZIO: Invio SMS di conferma ---
+        String numeroTelefono = paziente.getTelefono();
+        if (numeroTelefono != null && !numeroTelefono.isEmpty()) {
+            String dettagliSms = String.format(
+                "Medico: Dr. %s %s, Prestazione: %s, Data: %s, Ora: %s. Link: %s",
+                disponibilita.getMedico().getNome(),
+                disponibilita.getMedico().getCognome(),
+                disponibilita.getPrestazione().getNome(),
+                disponibilita.getData().toString(),
+                disponibilita.getOraInizio().toString(),
+                (tipo == TipoAppuntamento.virtuale) ? appuntamentoSalvato.getLinkVideocall() : "N/A"
+            );
+            smsService.sendConfirmationSms(numeroTelefono, dettagliSms);
+        }
+        // --- FINE: Invio SMS di conferma ---
+
         return appuntamentoSalvato;
     }
 
@@ -130,6 +149,23 @@ public class AppuntamentoService {
         Disponibilita disponibilita = appuntamento.getDisponibilita();
         disponibilita.setPrenotato(false);
         disponibilitaRepository.save(disponibilita);
+
+        // --- NUOVA LOGICA: Invio email di annullamento ---
+        String destinatario = appuntamento.getPaziente().getEmail();
+        String oggetto = "Annullamento appuntamento: " + disponibilita.getPrestazione().getNome();
+        String corpo = "Gentile " + appuntamento.getPaziente().getNome() + ",\n\n"
+                     + "Il tuo appuntamento su Flixbook per la prestazione '" + disponibilita.getPrestazione().getNome() 
+                     + "' del " + disponibilita.getData().toString() + " alle " + disponibilita.getOraInizio().toString() 
+                     + " è stato annullato.\n\n"
+                     + "Se hai bisogno di un nuovo appuntamento, puoi prenotare nuovamente sulla nostra piattaforma.\n\n"
+                     + "Cordiali saluti,\n"
+                     + "Il team di Flixbook";
+
+        try {
+            emailService.sendEmail(destinatario, oggetto, corpo);
+        } catch (Exception e) {
+            System.err.println("Errore nell'invio dell'email di annullamento a " + destinatario + ": " + e.getMessage());
+        }
     }
 
     // NUOVO: Metodo per annullare un appuntamento da parte del medico
@@ -152,5 +188,22 @@ public class AppuntamentoService {
         Disponibilita disponibilita = appuntamento.getDisponibilita();
         disponibilita.setPrenotato(false);
         disponibilitaRepository.save(disponibilita);
+
+        // --- NUOVA LOGICA: Invio email di annullamento ---
+        String destinatario = appuntamento.getPaziente().getEmail();
+        String oggetto = "Annullamento appuntamento: " + disponibilita.getPrestazione().getNome();
+        String corpo = "Gentile " + appuntamento.getPaziente().getNome() + ",\n\n"
+                     + "Il tuo appuntamento su Flixbook per la prestazione '" + disponibilita.getPrestazione().getNome() 
+                     + "' del " + disponibilita.getData().toString() + " alle " + disponibilita.getOraInizio().toString() 
+                     + " è stato annullato.\n\n"
+                     + "Se hai bisogno di un nuovo appuntamento, puoi prenotare nuovamente sulla nostra piattaforma.\n\n"
+                     + "Cordiali saluti,\n"
+                     + "Il team di Flixbook";
+
+        try {
+            emailService.sendEmail(destinatario, oggetto, corpo);
+        } catch (Exception e) {
+            System.err.println("Errore nell'invio dell'email di annullamento a " + destinatario + ": " + e.getMessage());
+        }
     }
 }

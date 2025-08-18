@@ -17,6 +17,7 @@ public class Appuntamento {
 
 
     private boolean reminderInviato = false;
+    private boolean smsReminderInviato = false;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
