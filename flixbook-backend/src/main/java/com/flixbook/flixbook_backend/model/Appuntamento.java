@@ -15,6 +15,9 @@ public class Appuntamento {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+
+    private boolean reminderInviato = false;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     @JoinColumn(name = "paziente_id", nullable = false)
