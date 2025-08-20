@@ -25,7 +25,15 @@ public interface DisponibilitaRepository extends JpaRepository<Disponibilita, Lo
     @Transactional
     long deleteByDataBefore(LocalDate data); // Questo metodo eliminerà gli slot con data precedente a quella passata
     List<Disponibilita> findByDataBefore(LocalDate data);
-        List<Disponibilita> findByMedicoId(Long medicoId);
+    List<Disponibilita> findByMedicoId(Long medicoId);
+
+    // Metodo per recuperare le disponibilità attive e future di un medico
+    @Query("SELECT d FROM Disponibilita d " +
+           "WHERE d.medico.id = :medicoId " +
+           "AND d.prenotato = false " +
+           "AND d.data >= CURRENT_DATE " +
+           "ORDER BY d.data ASC, d.oraInizio ASC")
+    List<Disponibilita> findActiveDisponibilitaByMedicoId(@Param("medicoId") Long medicoId);
 
     
 }

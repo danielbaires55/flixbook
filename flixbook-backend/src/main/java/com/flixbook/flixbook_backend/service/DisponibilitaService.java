@@ -1,13 +1,16 @@
 package com.flixbook.flixbook_backend.service;
 
+import com.flixbook.flixbook_backend.model.Appuntamento;
 import com.flixbook.flixbook_backend.model.Disponibilita;
 import com.flixbook.flixbook_backend.model.Medico;
 import com.flixbook.flixbook_backend.model.Prestazione;
+import com.flixbook.flixbook_backend.repository.AppuntamentoRepository;
 import com.flixbook.flixbook_backend.repository.DisponibilitaRepository;
 import com.flixbook.flixbook_backend.repository.MedicoRepository;
 import com.flixbook.flixbook_backend.repository.PrestazioneRepository;
 
-import jakarta.annotation.PostConstruct;
+//import jakarta.annotation.PostConstruct;
+import jakarta.transaction.Transactional;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -28,6 +31,9 @@ public class DisponibilitaService {
 
     @Autowired
     private PrestazioneRepository prestazioneRepository;
+
+    @Autowired
+    private AppuntamentoRepository appuntamentoRepository;
 
     public Disponibilita createDisponibilita(Long medicoId, Long prestazioneId, LocalDate data, LocalTime oraInizio,
             LocalTime oraFine) {
@@ -66,5 +72,28 @@ public class DisponibilitaService {
 
     public List<Disponibilita> getDisponibilitaByMedicoId(Long medicoId) {
         return disponibilitaRepository.findByMedicoId(medicoId);
+    }
+
+    public List<Disponibilita> getActiveDisponibilitaByMedicoId(Long medicoId) {
+        return disponibilitaRepository.findActiveDisponibilitaByMedicoId(medicoId);
+    }
+    
+    @Transactional
+ public void deleteDisponibilita(Long disponibilitaId, String medicoEmail) {
+        Disponibilita disponibilita = disponibilitaRepository.findById(disponibilitaId)
+            .orElseThrow(() -> new IllegalArgumentException("Disponibilità non trovata."));
+
+        if (!disponibilita.getMedico().getEmail().equals(medicoEmail)) {
+            throw new SecurityException("Non sei autorizzato ad eliminare questa disponibilità.");
+        }
+
+        // Trova e cancella gli appuntamenti collegati, indipendentemente dallo stato
+        List<Appuntamento> appuntamenti = appuntamentoRepository.findByDisponibilita(disponibilita);
+        if (!appuntamenti.isEmpty()) {
+            appuntamentoRepository.deleteAll(appuntamenti);
+        }
+
+        // Ora puoi eliminare la disponibilità
+        disponibilitaRepository.delete(disponibilita);
     }
 }

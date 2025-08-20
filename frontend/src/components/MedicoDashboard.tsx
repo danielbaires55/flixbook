@@ -57,15 +57,12 @@ const MedicoDashboard = () => {
       };
 
       try {
-        const [
-          profileResponse,
-          appuntamentiResponse,
-          disponibilitaResponse,
-        ] = await Promise.all([
-          axios.get(`${API_BASE_URL}/medici/profile`, config),
-          axios.get(`${API_BASE_URL}/appuntamenti/medico`, config),
-          axios.get(`${API_BASE_URL}/disponibilita/medico`, config),
-        ]);
+        const [profileResponse, appuntamentiResponse, disponibilitaResponse] =
+          await Promise.all([
+            axios.get(`${API_BASE_URL}/medici/profile`, config),
+            axios.get(`${API_BASE_URL}/appuntamenti/medico`, config),
+            axios.get(`${API_BASE_URL}/disponibilita/medico`, config),
+          ]);
 
         setProfile(profileResponse.data);
         setAppuntamenti(appuntamentiResponse.data);
@@ -100,7 +97,9 @@ const MedicoDashboard = () => {
 
       // Aggiorna lo stato dell'appuntamento nel frontend senza ricaricare la pagina
       const updatedAppuntamenti = appuntamenti.map((app) =>
-        app.id === appuntamentoId ? { ...app, stato: "annullato" as const } : app
+        app.id === appuntamentoId
+          ? { ...app, stato: "annullato" as const }
+          : app
       );
       setAppuntamenti(updatedAppuntamenti);
     } catch (err) {
@@ -112,6 +111,33 @@ const MedicoDashboard = () => {
       }
     }
   };
+
+  // NUOVO: Funzione per eliminare una disponibilità
+  // Funzione per eliminare una disponibilità
+    const handleEliminaDisponibilita = async (disponibilitaId: number) => {
+        if (!window.confirm("Sei sicuro di voler eliminare questa disponibilità?")) {
+            return;
+        }
+    
+        const token = localStorage.getItem("jwtToken");
+        try {
+            await axios.delete(`${API_BASE_URL}/disponibilita/medico/${disponibilitaId}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            alert("Disponibilità eliminata con successo!");
+            
+            // Aggiorna lo stato nel frontend
+            const updatedList = disponibilitaList.filter(disp => disp.id !== disponibilitaId);
+            setDisponibilitaList(updatedList);
+        } catch (err) {
+            console.error("Errore nell'eliminazione della disponibilità", err);
+            if (axios.isAxiosError(err) && err.response) {
+                alert(`Errore: ${err.response.data}`);
+            } else {
+                alert("Errore nell'eliminazione. Riprova.");
+            }
+        }
+    };
 
   // Funzione per reindirizzare alla creazione delle disponibilità
   const handleRedirectToCreate = () => {
@@ -151,6 +177,7 @@ const MedicoDashboard = () => {
             </div>
           </div>
         </div>
+
         <div className="col-md-6 mb-4">
           <div className="card shadow-sm h-100">
             <div className="card-body">
@@ -257,6 +284,12 @@ const MedicoDashboard = () => {
                           {disp.prestazione.costo})
                         </small>
                       </div>
+                      <button
+                        className="btn btn-danger btn-sm mt-2 mt-sm-0"
+                        onClick={() => handleEliminaDisponibilita(disp.id)}
+                      >
+                        Elimina Disponibilità
+                      </button>
                     </li>
                   ))}
                 </ul>

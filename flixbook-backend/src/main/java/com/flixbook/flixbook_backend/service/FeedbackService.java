@@ -5,15 +5,15 @@ import com.flixbook.flixbook_backend.model.StatoAppuntamento;
 import com.flixbook.flixbook_backend.repository.AppuntamentoRepository;
 import com.flixbook.flixbook_backend.repository.FeedbackRepository;
 import com.flixbook.flixbook_backend.model.Feedback;
-import jakarta.annotation.PostConstruct;
-import jakarta.mail.MessagingException;
+// import jakarta.annotation.PostConstruct;
+// import jakarta.mail.MessagingException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
+//import java.util.Optional;
 
 @Service
 public class FeedbackService {

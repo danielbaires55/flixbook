@@ -2,8 +2,9 @@ package com.flixbook.flixbook_backend.service;
 
 // Nel tuo file ReminderService.java
 import com.flixbook.flixbook_backend.model.Appuntamento;
+import com.flixbook.flixbook_backend.model.StatoAppuntamento;
 import com.flixbook.flixbook_backend.repository.AppuntamentoRepository;
-import com.flixbook.flixbook_backend.repository.FeedbackRepository; // Importa il FeedbackRepository
+//import com.flixbook.flixbook_backend.repository.FeedbackRepository; 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -11,8 +12,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
-import jakarta.mail.MessagingException;
-import jakarta.annotation.PostConstruct;
+//import jakarta.mail.MessagingException;
+//import jakarta.annotation.PostConstruct;
 
 @Service
 public class ReminderService {
@@ -27,8 +28,8 @@ public class ReminderService {
     private SmsService smsService;
 
     // Aggiungi la dipendenza del FeedbackRepository
-    @Autowired
-    private FeedbackRepository feedbackRepository;
+    //@Autowired
+    //private FeedbackRepository feedbackRepository;
 
     @Transactional
     public void sendRemindersOnStartup() {
@@ -42,21 +43,26 @@ public class ReminderService {
 
         if (!appuntamentiDaRicordare.isEmpty()) {
             for (Appuntamento appuntamento : appuntamentiDaRicordare) {
-                // Logica per inviare il promemoria via EMAIL
-                if (!appuntamento.isReminderInviato()) {
-                    String destinatario = appuntamento.getPaziente().getEmail();
-                    String oggetto = "Promemoria appuntamento: " + appuntamento.getDisponibilita().getPrestazione().getNome();
-                    String corpo = "Gentile " + appuntamento.getPaziente().getNome() + ",\n\n"
-                                 + "Questo è un promemoria per il tuo prossimo appuntamento su Flixbook.\n"
-                                 + "Dettagli:\n"
-                                 + "Medico: Dr. " + appuntamento.getDisponibilita().getMedico().getNome() + " " + appuntamento.getDisponibilita().getMedico().getCognome() + "\n"
-                                 + "Prestazione: " + appuntamento.getDisponibilita().getPrestazione().getNome() + "\n"
-                                 + "Data: " + appuntamento.getDataEOraInizio().toLocalDate() + "\n"
-                                 + "Ora: " + appuntamento.getDataEOraInizio().toLocalTime() + "\n\n"
-                                 + "Grazie per aver usato Flixbook!";
-                    emailService.sendEmail(destinatario, oggetto, corpo);
-                    appuntamento.setReminderInviato(true);
-                }
+                if (appuntamento.getStato() != StatoAppuntamento.annullato) {
+                    // Logica per inviare il promemoria via EMAIL
+                    if (!appuntamento.isReminderInviato()) {
+                        try {
+                            String destinatario = appuntamento.getPaziente().getEmail();
+                            String oggetto = "Promemoria appuntamento: " + appuntamento.getDisponibilita().getPrestazione().getNome();
+                            String corpo = "Gentile " + appuntamento.getPaziente().getNome() + ",\n\n"
+                                         + "Questo è un promemoria per il tuo prossimo appuntamento su Flixbook.\n"
+                                         + "Dettagli:\n"
+                                         + "Medico: Dr. " + appuntamento.getDisponibilita().getMedico().getNome() + " " + appuntamento.getDisponibilita().getMedico().getCognome() + "\n"
+                                         + "Prestazione: " + appuntamento.getDisponibilita().getPrestazione().getNome() + "\n"
+                                         + "Data: " + appuntamento.getDataEOraInizio().toLocalDate() + "\n"
+                                         + "Ora: " + appuntamento.getDataEOraInizio().toLocalTime() + "\n\n"
+                                         + "Grazie per aver usato Flixbook!";
+                            emailService.sendEmail(destinatario, oggetto, corpo);
+                            appuntamento.setReminderInviato(true);
+                        } catch (Exception e) {
+                            System.err.println("Errore nell'invio del promemoria via email: " + e.getMessage());
+                        }
+                    }
 
                 // Logica per inviare il promemoria via SMS
                 if (!appuntamento.isSmsReminderInviato()) {
@@ -79,4 +85,5 @@ public class ReminderService {
 
         System.out.println(String.format("Promemoria inviati a %d appuntamenti all'avvio.", appuntamentiDaRicordare.size()));
     }
+}
 }
