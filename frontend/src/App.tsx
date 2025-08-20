@@ -10,6 +10,7 @@ import MedicoDashboard from './components/MedicoDashboard';
 import PazienteDashboard from './components/PazienteDashboard';
 import CreateDisponibilitaForm from './components/CreateDisponibilitaForm';
 import FeedbackForm from './components/FeedbackForm';
+import HomePage from './pages/HomePage';
 
 // Componente helper per proteggere le rotte
 type ProtectedRouteProps = {
@@ -48,7 +49,9 @@ function App() {
       <Routes>
         {/* Rotta pubblica per il calendario delle prenotazioni */}
         <Route path="/book" element={<BookingCalendar />} />
-        
+        {/* Rotta pubblica per la home page */}
+        <Route path="/" element={<HomePage />} />
+
         {/* Rotta pubblica per il login */}
         <Route path="/login" element={<Login />} />
 

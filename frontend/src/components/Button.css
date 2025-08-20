@@ -1,0 +1,78 @@
+.custom-button {
+  display: flex;
+  min-width: 135px;
+  height: 53px;
+  padding: 12px 24px;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  border-radius: 8px;
+  background: #4E92D6;
+  border: none;
+  cursor: pointer;
+  color: #FFF;
+  font-family: Inter, -apple-system, Roboto, Helvetica, sans-serif;
+  font-size: 14px;
+  font-style: normal;
+  font-weight: 500;
+  line-height: normal;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+  white-space: nowrap;
+}
+
+.custom-button:hover {
+  background: #3a7bc0;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(78, 146, 214, 0.3);
+}
+
+.custom-button:active {
+  background: #2c5f94;
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(78, 146, 214, 0.3);
+}
+
+.custom-button:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.custom-button:focus {
+  outline: 2px solid #4E92D6;
+  outline-offset: 2px;
+}
+
+/* Mobile Styles */
+@media (max-width: 768px) {
+  .custom-button {
+    min-width: 120px;
+    height: 48px;
+    padding: 10px 20px;
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .custom-button {
+    min-width: 100px;
+    height: 44px;
+    padding: 8px 16px;
+    font-size: 13px;
+  }
+}
+
+/* Touch device optimization */
+@media (hover: none) and (pointer: coarse) {
+  .custom-button {
+    min-height: 44px;
+    padding: 12px 20px;
+  }
+
+  .custom-button:hover {
+    transform: none;
+    box-shadow: none;
+  }
+}

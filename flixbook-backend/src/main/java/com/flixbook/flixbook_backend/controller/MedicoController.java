@@ -42,5 +42,10 @@ public class MedicoController {
         List<Medico> medici = medicoService.findMediciByPrestazioneId(prestazioneId);
         return ResponseEntity.ok(medici);
     }
+
+    @GetMapping
+    public List<Medico> getAllMedici() {
+        return medicoService.findAll();
+    }
     
 }

@@ -1,6 +1,6 @@
 package com.flixbook.flixbook_backend.config;
 
-import com.flixbook.flixbook_backend.config.JwtUtil;
+//import com.flixbook.flixbook_backend.config.JwtUtil;
 import com.flixbook.flixbook_backend.service.CustomUserDetailsService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
