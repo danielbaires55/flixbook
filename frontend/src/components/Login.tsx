@@ -2,13 +2,11 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
+import type { JwtPayload } from 'jwt-decode';
 
-// Interfaccia definita all'interno del file per l'uso locale
-interface DecodedToken {
-  sub: string;
-  role: 'MEDICO' | 'PAZIENTE'; 
-  iat: number;
-  exp: number;
+// Interfaccia personalizzata per il token
+interface MyJwtPayload extends JwtPayload {
+    role: 'MEDICO' | 'PAZIENTE'; 
 }
 
 const Login = () => {
@@ -25,7 +23,7 @@ const Login = () => {
             localStorage.setItem('jwtToken', token);
             console.log('Login riuscito:', response.data);
 
-            const decodedToken: DecodedToken = jwtDecode(token);
+            const decodedToken = jwtDecode<MyJwtPayload>(token);
             const userRole = decodedToken.role;
 
             if (userRole === 'MEDICO') {
