@@ -27,7 +27,6 @@ public class ReminderService {
     @Autowired
     private SmsService smsService;
 
-    // Aggiungi la dipendenza del FeedbackRepository
     //@Autowired
     //private FeedbackRepository feedbackRepository;
 

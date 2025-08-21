@@ -1,5 +1,5 @@
 import React from 'react';
-import './MediciSection.css';
+import './css/MediciSection.css';
 
 interface DoctorCardProps {
   name: string;

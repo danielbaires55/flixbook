@@ -3,7 +3,7 @@ import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
 import "bootstrap/dist/css/bootstrap.min.css";
 import axios from "axios";
-import "./BookingCalendar.css";
+import "./css/BookingCalendar.css";
 import { useNavigate } from "react-router-dom";
 
 const API_BASE_URL = "http://localhost:8080/api";

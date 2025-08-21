@@ -16,9 +16,6 @@ public class EmailService {
         message.setTo(to);
         message.setSubject(subject);
         message.setText(body);
-
-        // Puoi opzionalmente impostare anche un mittente, se non lo hai configurato
-        // message.setFrom("tuo_indirizzo@gmail.com");
         message.setFrom("flixbook819@gmail.com");
         mailSender.send(message);
         System.out.println("Email inviata a " + to);

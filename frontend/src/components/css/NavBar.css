@@ -134,6 +134,7 @@
 
 .navbar-button:hover {
   background: #4E92D6;
+  color: whitesmoke;
 }
 
 .navbar-button:hover span {

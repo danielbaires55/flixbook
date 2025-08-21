@@ -1,8 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import './NavBar.css';
+import './css/NavBar.css';
 import logo from '../assets/logo-notext.png';
 import { useNavigate, Link } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
+import type { JwtPayload } from 'jwt-decode'; // Importa anche JwtPayload
+// import Button from './Button';
+import { Button } from '@mui/material';
+
+
+// Interfaccia personalizzata per il payload del token
+interface MyJwtPayload extends JwtPayload {
+    role: 'MEDICO' | 'PAZIENTE';
+    sub: string;
+}
 
 interface UserProfile {
     nome: string;
@@ -13,11 +23,12 @@ const getStoredUser = (): UserProfile | null => {
     const token = localStorage.getItem('jwtToken');
     if (!token) return null;
     try {
-        const decodedToken = jwtDecode(token);
+        // Usa la nuova interfaccia per la decodifica
+        const decodedToken = jwtDecode<MyJwtPayload>(token);
         const userRole = decodedToken.role;
         const userName = decodedToken.sub.split('@')[0];
         return { nome: userName, ruolo: userRole };
-    } catch (error) {
+    } catch {
         return null;
     }
 };
@@ -37,17 +48,16 @@ const NavBar: React.FC = () => {
 
     const handleLoginClick = () => {
         navigate('/login');
-        setIsMobileMenuOpen(false); // Chiudi il menu mobile
+        setIsMobileMenuOpen(false);
     };
 
     const handleLogoutClick = () => {
         localStorage.removeItem('jwtToken');
         setUser(null);
         navigate('/login');
-        setIsMobileMenuOpen(false); // Chiudi il menu mobile
+        setIsMobileMenuOpen(false);
     };
-    
-    // Funzione per reindirizzare alla dashboard corretta
+
     const handleDashboardClick = () => {
         if (user?.ruolo === 'MEDICO') {
             navigate('/medico-dashboard');
@@ -72,18 +82,18 @@ const NavBar: React.FC = () => {
 
     const authButton = user ? (
         <div className="navbar-button">
-            <button onClick={handleDashboardClick}>
+            <Button onClick={handleDashboardClick}>
                 Dashboard
-            </button>
-            <button onClick={handleLogoutClick}>
+            </Button>
+            <Button onClick={handleLogoutClick}>
                 Logout
-            </button>
+            </Button>
         </div>
     ) : (
         <div className="navbar-button">
-            <button onClick={handleLoginClick}>
+            <Link to="/login">
                 Accedi
-            </button>
+            </Link>
         </div>
     );
 

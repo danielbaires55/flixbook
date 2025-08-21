@@ -1,5 +1,5 @@
 import React from 'react';
-import './SpecialitaSection.css';
+import './css/SpecialitaSection.css';
 
 interface SpecialtyCardProps {
   name: string;

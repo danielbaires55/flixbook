@@ -5,7 +5,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 import BookingCalendar from './components/BookingCalendar';
 import Login from './components/Login';
-import PazienteRegistrationForm from './components/PazienteRegistrationForm'; // <-- Importa il nuovo componente
+//import PazienteRegistrationForm from './components/PazienteRegistrationForm'; 
 import MedicoDashboard from './components/MedicoDashboard';
 import PazienteDashboard from './components/PazienteDashboard';
 import CreateDisponibilitaForm from './components/CreateDisponibilitaForm';
@@ -56,7 +56,7 @@ function App() {
         <Route path="/login" element={<Login />} />
 
         {/* Rotta pubblica per la registrazione del paziente */}
-        <Route path="/register" element={<PazienteRegistrationForm />} />
+        {/* <Route path="/register" element={<PazienteRegistrationForm />} /> */}
 
         {/* Rotta protetta per il Medico */}
         <Route 
