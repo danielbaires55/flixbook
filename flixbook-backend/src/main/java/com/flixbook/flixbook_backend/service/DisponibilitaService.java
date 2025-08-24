@@ -1,24 +1,21 @@
+// src/main/java/com/flixbook/flixbook_backend/service/DisponibilitaService.java
 package com.flixbook.flixbook_backend.service;
 
-import com.flixbook.flixbook_backend.model.Appuntamento;
 import com.flixbook.flixbook_backend.model.Disponibilita;
 import com.flixbook.flixbook_backend.model.Medico;
 import com.flixbook.flixbook_backend.model.Prestazione;
-import com.flixbook.flixbook_backend.repository.AppuntamentoRepository;
 import com.flixbook.flixbook_backend.repository.DisponibilitaRepository;
 import com.flixbook.flixbook_backend.repository.MedicoRepository;
 import com.flixbook.flixbook_backend.repository.PrestazioneRepository;
 
-//import jakarta.annotation.PostConstruct;
 import jakarta.transaction.Transactional;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
-import java.util.NoSuchElementException;
+import java.util.Objects;
 
 @Service
 public class DisponibilitaService {
@@ -32,68 +29,63 @@ public class DisponibilitaService {
     @Autowired
     private PrestazioneRepository prestazioneRepository;
 
-    @Autowired
-    private AppuntamentoRepository appuntamentoRepository;
-
-    public Disponibilita createDisponibilita(Long medicoId, Long prestazioneId, LocalDate data, LocalTime oraInizio,
+    /**
+     * Crea una nuova disponibilità.
+     * Riceve il medicoId direttamente dal controller, che lo ha estratto dal token.
+     */
+    public Disponibilita createDisponibilita(
+            Long medicoId,
+            Long prestazioneId,
+            LocalDate data,
+            LocalTime oraInizio,
             LocalTime oraFine) {
+
         Medico medico = medicoRepository.findById(medicoId)
-                .orElseThrow(() -> new NoSuchElementException("Medico non trovato con ID: " + medicoId));
-
+                .orElseThrow(() -> new IllegalArgumentException("Medico non trovato con ID: " + medicoId));
         Prestazione prestazione = prestazioneRepository.findById(prestazioneId)
-                .orElseThrow(() -> new NoSuchElementException("Prestazione non trovata con ID: " + prestazioneId));
+                .orElseThrow(() -> new IllegalArgumentException("Prestazione non trovata con ID: " + prestazioneId));
 
-        Disponibilita disponibilita = new Disponibilita();
-        disponibilita.setMedico(medico);
-        disponibilita.setPrestazione(prestazione);
-        disponibilita.setData(data);
-        disponibilita.setOraInizio(oraInizio);
-        disponibilita.setOraFine(oraFine);
-        disponibilita.setPrenotato(false);
+        Disponibilita nuovaDisponibilita = new Disponibilita();
+        nuovaDisponibilita.setMedico(medico);
+        nuovaDisponibilita.setPrestazione(prestazione);
+        nuovaDisponibilita.setData(data);
+        nuovaDisponibilita.setOraInizio(oraInizio);
+        nuovaDisponibilita.setOraFine(oraFine);
+        nuovaDisponibilita.setPrenotato(false);
 
-        return disponibilitaRepository.save(disponibilita);
+        return disponibilitaRepository.save(nuovaDisponibilita);
     }
-
-    // --- Metodi per il recupero delle disponibilità ---
 
     /**
-     * Recupera gli slot di disponibilità disponibili per una specifica prestazione
-     * e medico,
-     * escludendo le date passate e gli slot già prenotati.
-     * Questo metodo usa la query personalizzata nel repository.
-     * * @param prestazioneId L'ID della prestazione.
-     * 
-     * @param medicoId L'ID del medico.
-     * @return Una lista di slot di disponibilità disponibili.
+     * Restituisce le disponibilità attive (non prenotate) per un dato medico.
      */
-    public List<Disponibilita> getAvailableSlots(Long prestazioneId, Long medicoId) {
-        return disponibilitaRepository.findAvailableSlots(prestazioneId, medicoId, LocalTime.now());
-    }
-
-    public List<Disponibilita> getDisponibilitaByMedicoId(Long medicoId) {
-        return disponibilitaRepository.findByMedicoId(medicoId);
-    }
-
     public List<Disponibilita> getActiveDisponibilitaByMedicoId(Long medicoId) {
-        return disponibilitaRepository.findActiveDisponibilitaByMedicoId(medicoId);
+        return disponibilitaRepository.findByMedicoIdAndPrenotatoFalse(medicoId);
     }
-    
+
+    /**
+     * Cancella una disponibilità, verificando prima i permessi.
+     * Riceve il medicoId dell'utente autenticato per il controllo di sicurezza.
+     */
     @Transactional
- public void deleteDisponibilita(Long disponibilitaId, String medicoEmail) {
+    public void deleteDisponibilita(Long disponibilitaId, Long medicoIdDaToken) {
         Disponibilita disponibilita = disponibilitaRepository.findById(disponibilitaId)
-            .orElseThrow(() -> new IllegalArgumentException("Disponibilità non trovata."));
+                .orElseThrow(() -> new IllegalArgumentException("Disponibilità non trovata."));
 
-        if (!disponibilita.getMedico().getEmail().equals(medicoEmail)) {
-            throw new SecurityException("Non sei autorizzato ad eliminare questa disponibilità.");
+        // Controllo di sicurezza: l'utente può cancellare solo le disponibilità del medico a cui è associato.
+        if (!Objects.equals(disponibilita.getMedico().getId(), medicoIdDaToken)) {
+            throw new SecurityException("Non sei autorizzato a cancellare questa disponibilità.");
         }
 
-        // Trova e cancella gli appuntamenti collegati, indipendentemente dallo stato
-        List<Appuntamento> appuntamenti = appuntamentoRepository.findByDisponibilita(disponibilita);
-        if (!appuntamenti.isEmpty()) {
-            appuntamentoRepository.deleteAll(appuntamenti);
+        // Controllo di business: non si può cancellare una disponibilità già prenotata.
+        if (disponibilita.isPrenotato()) {
+            throw new IllegalStateException("Impossibile cancellare una disponibilità che ha già un appuntamento associato.");
         }
 
-        // Ora puoi eliminare la disponibilità
         disponibilitaRepository.delete(disponibilita);
+    }
+
+    public List<Disponibilita> getAvailableSlots(Long prestazioneId, Long medicoId) {
+        return disponibilitaRepository.findAvailableSlots(prestazioneId, medicoId);
     }
 }

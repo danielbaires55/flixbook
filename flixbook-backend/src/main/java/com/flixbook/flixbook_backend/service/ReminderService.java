@@ -42,7 +42,7 @@ public class ReminderService {
 
         if (!appuntamentiDaRicordare.isEmpty()) {
             for (Appuntamento appuntamento : appuntamentiDaRicordare) {
-                if (appuntamento.getStato() != StatoAppuntamento.annullato) {
+                if (appuntamento.getStato() != StatoAppuntamento.ANNULLATO) {
                     // Logica per inviare il promemoria via EMAIL
                     if (!appuntamento.isReminderInviato()) {
                         try {

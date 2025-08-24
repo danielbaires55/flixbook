@@ -15,10 +15,16 @@ public class Appuntamento {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-
+    // --- CORREZIONE: Aggiunta l'annotazione @Column ---
+    @Column(name = "reminder_inviato", nullable = false)
     private boolean reminderInviato = false;
+
+    @Column(name = "sms_reminder_inviato", nullable = false)
     private boolean smsReminderInviato = false;
+
+    @Column(name = "feedback_inviato", nullable = false)
     private boolean feedbackInviato = false;
+    // ---------------------------------------------------
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
@@ -27,7 +33,7 @@ public class Appuntamento {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
-    @JoinColumn(name = "disponibilita_id", nullable = false)
+    @JoinColumn(name = "disponibilita_id")
     private Disponibilita disponibilita;
 
     @Column(name = "data_e_ora_inizio", nullable = false)

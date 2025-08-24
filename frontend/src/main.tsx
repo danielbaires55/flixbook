@@ -1,12 +1,15 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.tsx';
+import { AuthProvider } from './context/AuthProvider.tsx'; // Percorso corretto
 import './index.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
-import 'react-big-calendar/lib/css/react-big-calendar.css';
+
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
+    <AuthProvider>
+      <App />
+    </AuthProvider>
   </React.StrictMode>,
 );

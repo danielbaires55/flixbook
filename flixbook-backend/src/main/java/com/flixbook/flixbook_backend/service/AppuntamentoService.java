@@ -5,35 +5,31 @@ import com.flixbook.flixbook_backend.repository.AppuntamentoRepository;
 import com.flixbook.flixbook_backend.repository.DisponibilitaRepository;
 import com.flixbook.flixbook_backend.repository.PazienteRepository;
 
-import jakarta.annotation.PostConstruct;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
+import org.springframework.beans.factory.InitializingBean;
 
 @Service
-public class AppuntamentoService {
+@Transactional
+public class AppuntamentoService implements InitializingBean {
 
     @Autowired
     private AppuntamentoRepository appuntamentoRepository;
-
     @Autowired
     private DisponibilitaRepository disponibilitaRepository;
-
     @Autowired
     private PazienteRepository pazienteRepository;
-
     @Autowired
     private EmailService emailService;
-
     @Autowired
     private SmsService smsService;
 
-    @Transactional
     public Appuntamento creaAppuntamento(Long disponibilitaId, String pazienteEmail, TipoAppuntamento tipo) {
         Disponibilita disponibilita = disponibilitaRepository.findById(disponibilitaId)
                 .orElseThrow(() -> new IllegalArgumentException("Disponibilità non trovata."));
@@ -51,7 +47,7 @@ public class AppuntamentoService {
         appuntamento.setDataEOraInizio(LocalDateTime.of(disponibilita.getData(), disponibilita.getOraInizio()));
         appuntamento.setDataEOraFine(LocalDateTime.of(disponibilita.getData(), disponibilita.getOraFine()));
         appuntamento.setTipoAppuntamento(tipo);
-        appuntamento.setStato(StatoAppuntamento.confermato);
+        appuntamento.setStato(StatoAppuntamento.CONFERMATO);
         appuntamento.setDataPrenotazione(LocalDateTime.now());
 
         if (tipo == TipoAppuntamento.virtuale) {
@@ -61,76 +57,37 @@ public class AppuntamentoService {
 
         disponibilita.setPrenotato(true);
         disponibilitaRepository.save(disponibilita);
-
         Appuntamento appuntamentoSalvato = appuntamentoRepository.save(appuntamento);
 
-        // --- INIZIO: Personalizzazione dell'email ---
+        // --- Invio mail di conferma ---
         String destinatario = paziente.getEmail();
         String oggetto = "Conferma appuntamento: " + disponibilita.getPrestazione().getNome();
-        
-        String corpo = "Gentile " + paziente.getNome() + ",\n\n"
-                     + "Il tuo appuntamento su Flixbook è stato confermato con i seguenti dettagli:\n"
-                     + "Medico: Dr. " + disponibilita.getMedico().getNome() + " " + disponibilita.getMedico().getCognome() + "\n"
-                     + "Prestazione: " + disponibilita.getPrestazione().getNome() + "\n"
-                     + "Data: " + disponibilita.getData().toString() + "\n"
-                     + "Ora: " + disponibilita.getOraInizio().toString() + "\n"
-                     + "Tipo appuntamento: " + tipo.toString() + "\n\n";
-
+        String corpo = String.format(
+            "Gentile %s,\n\nIl suo appuntamento è stato confermato:\n\n- Medico: Dr. %s %s\n- Prestazione: %s\n- Data: %s\n- Ora: %s\n\n",
+            paziente.getNome(), disponibilita.getMedico().getNome(), disponibilita.getMedico().getCognome(),
+            disponibilita.getPrestazione().getNome(), disponibilita.getData().toString(), disponibilita.getOraInizio().toString()
+        );
         if (tipo == TipoAppuntamento.virtuale) {
-            corpo += "Ecco il link per partecipare alla videocall: " + appuntamentoSalvato.getLinkVideocall() + "\n\n";
+            corpo += "Link per la videocall:\n" + appuntamentoSalvato.getLinkVideocall() + "\n\n";
         }
-
-        corpo += "Ti preghiamo di presentarti in tempo per la visita.\n\n"
-               + "Cordiali saluti,\n"
-               + "Il team di Flixbook";
-        
+        corpo += "Cordiali saluti,\nIl team di Flixbook";
         emailService.sendEmail(destinatario, oggetto, corpo);
-        // --- FINE: Personalizzazione dell'email ---
 
-        // --- INIZIO: Invio SMS di conferma ---
+        // --- Invio SMS di conferma ---
         String numeroTelefono = paziente.getTelefono();
-        if (numeroTelefono != null && !numeroTelefono.isEmpty()) {
+        if (numeroTelefono != null && !numeroTelefono.trim().isEmpty()) {
             String dettagliSms = String.format(
-                "Medico: Dr. %s %s, Prestazione: %s, Data: %s, Ora: %s. Link: %s",
-                disponibilita.getMedico().getNome(),
-                disponibilita.getMedico().getCognome(),
-                disponibilita.getPrestazione().getNome(),
-                disponibilita.getData().toString(),
-                disponibilita.getOraInizio().toString(),
-                (tipo == TipoAppuntamento.virtuale) ? appuntamentoSalvato.getLinkVideocall() : "N/A"
+                "Dr. %s %s, %s, Data: %s, Ora: %s.",
+                disponibilita.getMedico().getNome(), disponibilita.getMedico().getCognome(),
+                disponibilita.getPrestazione().getNome(), disponibilita.getData().toString(),
+                disponibilita.getOraInizio().toString()
             );
             smsService.sendConfirmationSms(numeroTelefono, dettagliSms);
         }
-        // --- FINE: Invio SMS di conferma ---
 
         return appuntamentoSalvato;
     }
 
-    @PostConstruct
-    @Transactional
-    public void updateCompletedAppointments() {
-        System.out.println("Avvio del task di aggiornamento appuntamenti completati...");
-
-        List<Appuntamento> appointmentsToComplete = appuntamentoRepository.findCompletedAppointments(LocalDateTime.now());
-
-        if (!appointmentsToComplete.isEmpty()) {
-            appointmentsToComplete.forEach(appuntamento -> appuntamento.setStato(StatoAppuntamento.completato));
-            appuntamentoRepository.saveAll(appointmentsToComplete);
-        }
-
-        System.out.println(String.format("Aggiornati %d appuntamenti a 'completato'.", appointmentsToComplete.size()));
-    }
-
-    public List<Appuntamento> findAppuntamentiByPazienteEmail(String pazienteEmail) {
-        return appuntamentoRepository.findByPazienteEmail(pazienteEmail);
-    }
-
-    // NUOVO: Metodo per trovare tutti gli appuntamenti di un medico
-    public List<Appuntamento> findAppuntamentiByMedicoEmail(String medicoEmail) {
-        return appuntamentoRepository.findByDisponibilita_Medico_Email(medicoEmail);
-    }
-
-    @Transactional
     public void annullaAppuntamento(Long appuntamentoId, String pazienteEmail) {
         Appuntamento appuntamento = appuntamentoRepository.findById(appuntamentoId)
                 .orElseThrow(() -> new IllegalArgumentException("Appuntamento non trovato."));
@@ -139,71 +96,149 @@ public class AppuntamentoService {
             throw new SecurityException("Non sei autorizzato ad annullare questo appuntamento.");
         }
 
-        if (appuntamento.getStato() != StatoAppuntamento.confermato) {
-            throw new IllegalArgumentException("L'appuntamento non può essere annullato in questo stato.");
-        }
-
-        appuntamento.setStato(StatoAppuntamento.annullato);
-        appuntamentoRepository.save(appuntamento);
-
         Disponibilita disponibilita = appuntamento.getDisponibilita();
-        disponibilita.setPrenotato(false);
-        disponibilitaRepository.save(disponibilita);
+        
+        emailService.sendEmail(pazienteEmail, "Conferma annullamento appuntamento",
+            "Gentile " + appuntamento.getPaziente().getNome() + ",\n\nLe confermiamo che il suo appuntamento è stato annullato con successo.\n\nCordiali saluti,\nIl team di Flixbook");
 
-        // --- NUOVA LOGICA: Invio email di annullamento ---
-        String destinatario = appuntamento.getPaziente().getEmail();
-        String oggetto = "Annullamento appuntamento: " + disponibilita.getPrestazione().getNome();
-        String corpo = "Gentile " + appuntamento.getPaziente().getNome() + ",\n\n"
-                     + "Il tuo appuntamento su Flixbook per la prestazione '" + disponibilita.getPrestazione().getNome() 
-                     + "' del " + disponibilita.getData().toString() + " alle " + disponibilita.getOraInizio().toString() 
-                     + " è stato annullato.\n\n"
-                     + "Se hai bisogno di un nuovo appuntamento, puoi prenotare nuovamente sulla nostra piattaforma.\n\n"
-                     + "Cordiali saluti,\n"
-                     + "Il team di Flixbook";
-
-        try {
-            emailService.sendEmail(destinatario, oggetto, corpo);
-        } catch (Exception e) {
-            System.err.println("Errore nell'invio dell'email di annullamento a " + destinatario + ": " + e.getMessage());
+        if (disponibilita != null) {
+            String destinatarioMedico = disponibilita.getMedico().getEmail();
+            String oggettoMedico = "Annullamento Appuntamento da parte di un paziente";
+            String corpoMedico = String.format(
+                "Gentile Dr. %s,\n\nL'appuntamento con il paziente %s %s per '%s' del %s alle %s è stato annullato.\n\nLo slot è stato liberato.",
+                disponibilita.getMedico().getCognome(), appuntamento.getPaziente().getNome(), appuntamento.getPaziente().getCognome(),
+                disponibilita.getPrestazione().getNome(), disponibilita.getData().toString(), disponibilita.getOraInizio().toString()
+            );
+            emailService.sendEmail(destinatarioMedico, oggettoMedico, corpoMedico);
+            
+            disponibilita.setPrenotato(false);
+            disponibilitaRepository.save(disponibilita);
         }
+
+        appuntamento.setStato(StatoAppuntamento.ANNULLATO);
+        appuntamento.setDisponibilita(null);
+        appuntamentoRepository.save(appuntamento);
     }
 
-    // NUOVO: Metodo per annullare un appuntamento da parte del medico
-    @Transactional
-    public void annullaAppuntamentoMedico(Long appuntamentoId, String medicoEmail) {
+    public void annullaAppuntamentoMedico(Long appuntamentoId, Long medicoIdDaToken) {
         Appuntamento appuntamento = appuntamentoRepository.findById(appuntamentoId)
                 .orElseThrow(() -> new IllegalArgumentException("Appuntamento non trovato."));
-
-        if (!appuntamento.getDisponibilita().getMedico().getEmail().equals(medicoEmail)) {
+        
+        Disponibilita disponibilita = appuntamento.getDisponibilita();
+        if (disponibilita == null) {
+             throw new IllegalStateException("Impossibile annullare un appuntamento già scollegato.");
+        }
+        if (!Objects.equals(disponibilita.getMedico().getId(), medicoIdDaToken)) {
             throw new SecurityException("Non sei autorizzato ad annullare questo appuntamento.");
         }
 
-        if (appuntamento.getStato() != StatoAppuntamento.confermato) {
-            throw new IllegalArgumentException("L'appuntamento non può essere annullato in questo stato.");
-        }
-
-        appuntamento.setStato(StatoAppuntamento.annullato);
-        appuntamentoRepository.save(appuntamento);
-
-        Disponibilita disponibilita = appuntamento.getDisponibilita();
         disponibilita.setPrenotato(false);
         disponibilitaRepository.save(disponibilita);
 
-        // --- NUOVA LOGICA: Invio email di annullamento ---
-        String destinatario = appuntamento.getPaziente().getEmail();
-        String oggetto = "Annullamento appuntamento: " + disponibilita.getPrestazione().getNome();
-        String corpo = "Gentile " + appuntamento.getPaziente().getNome() + ",\n\n"
-                     + "Il tuo appuntamento su Flixbook per la prestazione '" + disponibilita.getPrestazione().getNome() 
-                     + "' del " + disponibilita.getData().toString() + " alle " + disponibilita.getOraInizio().toString() 
-                     + " è stato annullato.\n\n"
-                     + "Se hai bisogno di un nuovo appuntamento, puoi prenotare nuovamente sulla nostra piattaforma.\n\n"
-                     + "Cordiali saluti,\n"
-                     + "Il team di Flixbook";
+        appuntamento.setStato(StatoAppuntamento.ANNULLATO);
+        appuntamento.setDisponibilita(null);
+        appuntamentoRepository.save(appuntamento);
 
-        try {
+        // Invia notifica (Email e SMS) di annullamento al paziente
+        Paziente paziente = appuntamento.getPaziente();
+        String oggettoPaziente = "Annullamento appuntamento: " + disponibilita.getPrestazione().getNome();
+        String corpoEmailPaziente = String.format(
+            "Gentile %s,\n\nLa informiamo che il suo appuntamento è stato annullato dallo studio medico. Dettagli:\n\n- Medico: Dr. %s %s\n- Prestazione: %s\n- Data: %s\n- Ora: %s\n\nCordiali saluti,\nIl team di Flixbook",
+            paziente.getNome(), disponibilita.getMedico().getNome(), disponibilita.getMedico().getCognome(),
+            disponibilita.getPrestazione().getNome(), disponibilita.getData().toString(), disponibilita.getOraInizio().toString()
+        );
+        emailService.sendEmail(paziente.getEmail(), oggettoPaziente, corpoEmailPaziente);
+
+        String numeroTelefonoPaziente = paziente.getTelefono();
+        if (numeroTelefonoPaziente != null && !numeroTelefonoPaziente.trim().isEmpty()) {
+            String corpoSms = String.format(
+                "Il suo appuntamento con Dr. %s %s del %s alle %s è stato annullato dallo studio medico.",
+                disponibilita.getMedico().getNome(), disponibilita.getMedico().getCognome(),
+                disponibilita.getData().toString(), disponibilita.getOraInizio().toString()
+            );
+            smsService.sendSms(numeroTelefonoPaziente, corpoSms);
+        }
+    }
+    
+    public List<Appuntamento> findAppuntamentiByPazienteEmail(String pazienteEmail) {
+        return appuntamentoRepository.findByPazienteEmail(pazienteEmail);
+    }
+
+    public List<Appuntamento> findAppuntamentiByMedicoId(Long medicoId) {
+        return appuntamentoRepository.findAppuntamentiByMedicoId(medicoId);
+    }
+
+    @Override
+    public void afterPropertiesSet() {
+        updateCompletedAppointments();
+        inviaPromemoriaDiAvvio();
+        inviaRichiesteFeedbackDiAvvio();
+    }
+
+    private void updateCompletedAppointments() {
+        List<Appuntamento> appointmentsToComplete = appuntamentoRepository.findAppointmentsToUpdateStatus(LocalDateTime.now(), StatoAppuntamento.CONFERMATO);
+        if (!appointmentsToComplete.isEmpty()) {
+            appointmentsToComplete.forEach(app -> app.setStato(StatoAppuntamento.COMPLETATO));
+            appuntamentoRepository.saveAll(appointmentsToComplete);
+        }
+    }
+
+    private void inviaPromemoriaDiAvvio() {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime limite24Ore = now.plusHours(24);
+        List<Appuntamento> appuntamentiDaRicordare = appuntamentoRepository.findAppuntamentiPerPromemoria(now, limite24Ore);
+
+        for (Appuntamento app : appuntamentiDaRicordare) {
+            if (app.getDisponibilita() == null) continue;
+            
+            Paziente paziente = app.getPaziente();
+            Disponibilita disponibilita = app.getDisponibilita();
+            
+            if (!app.isReminderInviato()) {
+                String oggetto = "Promemoria appuntamento: " + disponibilita.getPrestazione().getNome();
+                String corpo = String.format(
+                    "Gentile %s,\n\nLe ricordiamo il suo appuntamento di domani:\n\n- Medico: Dr. %s %s\n- Prestazione: %s\n- Ora: %s\n\nCordiali saluti,\nIl team di Flixbook",
+                    paziente.getNome(), disponibilita.getMedico().getNome(), disponibilita.getMedico().getCognome(),
+                    disponibilita.getPrestazione().getNome(), disponibilita.getOraInizio().toString()
+                );
+                emailService.sendEmail(paziente.getEmail(), oggetto, corpo);
+                app.setReminderInviato(true);
+            }
+            
+            if (!app.isSmsReminderInviato()) {
+                String numeroTelefono = paziente.getTelefono();
+                if (numeroTelefono != null && !numeroTelefono.trim().isEmpty()) {
+                    String corpoSms = String.format(
+                        "Promemoria appuntamento Flixbook domani con Dr. %s %s alle %s.",
+                        disponibilita.getMedico().getCognome(),
+                        disponibilita.getPrestazione().getNome(),
+                        disponibilita.getOraInizio().toString()
+                    );
+                    smsService.sendSms(numeroTelefono, corpoSms);
+                    app.setSmsReminderInviato(true);
+                }
+            }
+            appuntamentoRepository.save(app);
+        }
+    }
+    
+    private void inviaRichiesteFeedbackDiAvvio() {
+        List<Appuntamento> appuntamentiCompletati = appuntamentoRepository.findByStatoAndFeedbackInviatoIsFalse(StatoAppuntamento.COMPLETATO);
+        for (Appuntamento appuntamento : appuntamentiCompletati) {
+            if (appuntamento.getDisponibilita() == null) continue;
+            
+            String destinatario = appuntamento.getPaziente().getEmail();
+            String oggetto = "Lascia un feedback per il tuo appuntamento";
+            String feedbackLink = "http://localhost:5173/feedback/" + appuntamento.getId();
+            String corpo = String.format(
+                "Gentile %s,\n\nIl suo appuntamento con il Dr. %s è stato completato.\nCi aiuti a migliorare lasciando un feedback: %s\n\nGrazie!",
+                appuntamento.getPaziente().getNome(),
+                appuntamento.getDisponibilita().getMedico().getCognome(),
+                feedbackLink
+            );
             emailService.sendEmail(destinatario, oggetto, corpo);
-        } catch (Exception e) {
-            System.err.println("Errore nell'invio dell'email di annullamento a " + destinatario + ": " + e.getMessage());
+            appuntamento.setFeedbackInviato(true);
+            appuntamentoRepository.save(appuntamento);
         }
     }
 }

@@ -10,7 +10,7 @@ import { Button } from '@mui/material';
 
 // Interfaccia personalizzata per il payload del token
 interface MyJwtPayload extends JwtPayload {
-    role: 'MEDICO' | 'PAZIENTE';
+    role: 'MEDICO' | 'PAZIENTE' | 'COLLABORATORE';
     sub: string;
 }
 
@@ -58,13 +58,13 @@ const NavBar: React.FC = () => {
         setIsMobileMenuOpen(false);
     };
 
-    const handleDashboardClick = () => {
-        if (user?.ruolo === 'MEDICO') {
-            navigate('/medico-dashboard');
-        } else if (user?.ruolo === 'PAZIENTE') {
-            navigate('/paziente-dashboard');
-        }
-    };
+const handleDashboardClick = () => {
+    if (user?.ruolo === 'PAZIENTE') {
+        navigate('/paziente-dashboard');
+    } else if (user?.ruolo === 'MEDICO' || user?.ruolo === 'COLLABORATORE') {
+        navigate('/medico-dashboard');
+    }
+};
 
     const navLinks = (
         <>

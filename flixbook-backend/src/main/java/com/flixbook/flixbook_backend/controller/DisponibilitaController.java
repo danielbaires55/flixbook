@@ -1,18 +1,18 @@
 package com.flixbook.flixbook_backend.controller;
 
+import com.flixbook.flixbook_backend.config.CustomUserDetails;
 import com.flixbook.flixbook_backend.model.Disponibilita;
+import com.flixbook.flixbook_backend.service.CustomUserDetailsService;
 import com.flixbook.flixbook_backend.service.DisponibilitaService;
-import com.flixbook.flixbook_backend.service.MedicoService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
-//import java.util.Optional;
+import java.util.Objects;
 
 @RestController
 @RequestMapping("/api/disponibilita")
@@ -22,9 +22,9 @@ public class DisponibilitaController {
     private DisponibilitaService disponibilitaService;
 
     @Autowired
-    private MedicoService medicoService;
+    private CustomUserDetailsService userDetailsService;
 
-    // DTO (Data Transfer Object) per ricevere i dati dal frontend in modo pulito
+    // DTO per la richiesta
     private static class DisponibilitaRequest {
         public Long prestazioneId;
         public LocalDate data;
@@ -32,89 +32,56 @@ public class DisponibilitaController {
         public LocalTime oraFine;
     }
 
-    // Endpoint per la creazione di una disponibilità da parte del medico
-    // Richiede l'autenticazione del medico
     @PostMapping("/create")
-    public ResponseEntity<Disponibilita> createDisponibilita(@RequestBody DisponibilitaRequest request) {
+    public ResponseEntity<Disponibilita> createDisponibilita(@RequestBody DisponibilitaRequest request, Authentication authentication) {
+        CustomUserDetails userDetails = (CustomUserDetails) userDetailsService.loadUserByUsername(authentication.getName());
+        Long medicoId = userDetails.getMedicoId();
         try {
-            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-            String email = authentication.getName();
-            Long medicoId = medicoService.findMedicoByEmail(email)
-                    .orElseThrow(() -> new IllegalStateException("Medico non trovato"))
-                    .getId();
-
             Disponibilita newDisponibilita = disponibilitaService.createDisponibilita(
                     medicoId,
                     request.prestazioneId,
                     request.data,
                     request.oraInizio,
                     request.oraFine);
-
             return new ResponseEntity<>(newDisponibilita, HttpStatus.CREATED);
-        } catch (IllegalStateException e) {
-            return new ResponseEntity<>(HttpStatus.FORBIDDEN); // Medico non valido
         } catch (Exception e) {
-            return new ResponseEntity<>(HttpStatus.BAD_REQUEST); // Dati non validi
+            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
         }
     }
 
-    @GetMapping("/medico")
-    public ResponseEntity<List<Disponibilita>> getDisponibilitaByMedico(Authentication authentication) {
-        String emailMedico = authentication.getName();
-
-        return medicoService.findMedicoByEmail(emailMedico)
-                .map(medico -> {
-                    List<Disponibilita> disponibilita = disponibilitaService
-                            .getActiveDisponibilitaByMedicoId(medico.getId());
-                    return ResponseEntity.ok(disponibilita);
-                })
-                .orElse(new ResponseEntity<>(HttpStatus.FORBIDDEN));
+    @GetMapping("/medico/{medicoId}")
+    public ResponseEntity<List<Disponibilita>> getDisponibilitaByMedico(@PathVariable Long medicoId, Authentication authentication) {
+        CustomUserDetails userDetails = (CustomUserDetails) userDetailsService.loadUserByUsername(authentication.getName());
+        if (!Objects.equals(userDetails.getMedicoId(), medicoId)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        List<Disponibilita> disponibilita = disponibilitaService.getActiveDisponibilitaByMedicoId(medicoId);
+        return ResponseEntity.ok(disponibilita);
     }
 
-    // List<Disponibilita> disponibilita =
-    // disponibilitaService.getDisponibilitaByMedicoId(medicoIdOptional.get());
-    // return ResponseEntity.ok(disponibilita);
-    // }
+    @DeleteMapping("/medico/{disponibilitaId}")
+    public ResponseEntity<Void> deleteDisponibilita(@PathVariable Long disponibilitaId, Authentication authentication) {
+        CustomUserDetails userDetails = (CustomUserDetails) userDetailsService.loadUserByUsername(authentication.getName());
+        Long medicoId = userDetails.getMedicoId();
+        try {
+            disponibilitaService.deleteDisponibilita(disponibilitaId, medicoId);
+            return ResponseEntity.noContent().build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        }
+    }
 
-    // Endpoint per la visualizzazione delle disponibilità che restituisce i dati
-    // completi
-    // Questo endpoint deve essere protetto tramite Spring Security
     @GetMapping("/available")
     public ResponseEntity<List<Disponibilita>> getAvailableDisponibilita(
             @RequestParam Long prestazioneId,
             @RequestParam(required = false) Long medicoId) {
-
-        // Se un medicoID è fornito, usa la logica di filtering esistente
         if (medicoId != null) {
             List<Disponibilita> disponibilita = disponibilitaService.getAvailableSlots(prestazioneId, medicoId);
             return ResponseEntity.ok(disponibilita);
         } else {
-            // Qui puoi gestire il caso in cui medicoId non è fornito,
-            // ad esempio, restituendo una lista vuota o un errore
             return ResponseEntity.ok(List.of());
         }
-    }
-
-    @GetMapping("/available-authenticated")
-    public ResponseEntity<List<Disponibilita>> getAvailableDisponibilitaAuthenticated(
-            @RequestParam Long prestazioneId,
-            @RequestParam(required = false) Long medicoId) {
-
-        // Se un medicoID è fornito, usa la logica di filtering esistente
-        if (medicoId != null) {
-            // Questo metodo del servizio deve restituire i dati completi con il costo
-            List<Disponibilita> disponibilita = disponibilitaService.getAvailableSlots(prestazioneId, medicoId);
-            return ResponseEntity.ok(disponibilita);
-        } else {
-            // Qui puoi gestire il caso in cui medicoId non è fornito
-            return ResponseEntity.ok(List.of());
-        }
-    }
-
-    @DeleteMapping("/medico/{id}")
-    public ResponseEntity<Void> deleteDisponibilita(@PathVariable Long id, Authentication authentication) {
-        String medicoEmail = authentication.getName();
-        disponibilitaService.deleteDisponibilita(id, medicoEmail);
-        return ResponseEntity.noContent().build();
     }
 }

@@ -1,5 +1,9 @@
 package com.flixbook.flixbook_backend.model;
 
+import java.util.List;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import jakarta.persistence.*;
 
 @Entity
@@ -23,6 +27,15 @@ public class Medico {
     
     private String biografia;
     private String ruolo = "ROLE_MEDICO";
+
+    // --- AGGIUNGI QUESTO BLOCCO ---
+    @OneToMany(
+        mappedBy = "medico", // 'medico' is the field name in the Collaboratore entity
+        cascade = CascadeType.ALL,
+        orphanRemoval = true
+    )
+    @JsonIgnore // Important to prevent serialization loops
+    private List<Collaboratore> collaboratori;
 
     // Getters e Setters
     public Long getId() { return id; }
@@ -51,4 +64,12 @@ public class Medico {
     
     public String getRuolo() { return ruolo; }
     public void setRuolo(String ruolo) { this.ruolo = ruolo; }
+       // --- E I RELATIVI GETTER E SETTER ---
+    public List<Collaboratore> getCollaboratori() {
+        return collaboratori;
+    }
+      public void setCollaboratori(List<Collaboratore> collaboratori) {
+        this.collaboratori = collaboratori;
+    }
+
 }

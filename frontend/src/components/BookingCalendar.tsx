@@ -5,6 +5,7 @@ import "bootstrap/dist/css/bootstrap.min.css";
 import axios from "axios";
 import "./css/BookingCalendar.css";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from '../context/useAuth';
 
 const API_BASE_URL = "http://localhost:8080/api";
 
@@ -36,24 +37,22 @@ interface Disponibilita {
 }
 
 const BookingCalendar: React.FC = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
   const [specialitaList, setSpecialitaList] = useState<Specialita[]>([]);
   const [prestazioniList, setPrestazioniList] = useState<Prestazione[]>([]);
   const [mediciList, setMediciList] = useState<Medico[]>([]);
-  const [disponibilitaList, setDisponibilitaList] = useState<Disponibilita[]>(
-    []
-  );
+  const [disponibilitaList, setDisponibilitaList] = useState<Disponibilita[]>([]);
   const [selectedSpecialitaId, setSelectedSpecialitaId] = useState<string>("");
-  const [selectedPrestazioneId, setSelectedPrestazioneId] =
-    useState<string>("");
+  const [selectedPrestazioneId, setSelectedPrestazioneId] = useState<string>("");
   const [selectedMedicoId, setSelectedMedicoId] = useState<string>("");
   const [date, setDate] = useState<Date>(new Date());
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const navigate = useNavigate();
 
-  // 1. Recupera la lista delle specialità al caricamento
   useEffect(() => {
     axios
       .get<Specialita[]>(`${API_BASE_URL}/specialita`)
@@ -63,7 +62,6 @@ const BookingCalendar: React.FC = () => {
       );
   }, []);
 
-  // 2. Recupera la lista delle prestazioni quando la specialità cambia
   useEffect(() => {
     if (selectedSpecialitaId) {
       setLoading(true);
@@ -85,7 +83,6 @@ const BookingCalendar: React.FC = () => {
     }
   }, [selectedSpecialitaId]);
 
-  // 3. Recupera la lista dei medici quando la prestazione cambia
   useEffect(() => {
     if (selectedPrestazioneId) {
       setLoading(true);
@@ -108,103 +105,65 @@ const BookingCalendar: React.FC = () => {
     }
   }, [selectedPrestazioneId]);
 
-  // 4. Recupera le disponibilità quando sono stati selezionati sia prestazione che medico
   useEffect(() => {
-  if (selectedPrestazioneId && selectedMedicoId) {
-    setLoading(true);
+    if (selectedPrestazioneId && selectedMedicoId) {
+        setLoading(true);
+        const headers = user ? { Authorization: `Bearer ${user.token}` } : {};
 
-    const token = localStorage.getItem("jwtToken");
-
-    // Scegli l'URL in base alla presenza del token
-    const url = token
-      ? `${API_BASE_URL}/disponibilita/available-authenticated?prestazioneId=${selectedPrestazioneId}&medicoId=${selectedMedicoId}`
-      : `${API_BASE_URL}/disponibilita/available?prestazioneId=${selectedPrestazioneId}&medicoId=${selectedMedicoId}`;
-
-    // Aggiungi l'header di autorizzazione solo se il token esiste
-    const config = token
-      ? { headers: { Authorization: `Bearer ${token}` } }
-      : {};
-
-    axios
-      .get<Disponibilita[]>(url, config)
-      .then((response) => {
-        setDisponibilitaList(response.data);
-        const dates = response.data.map((slot) => slot.data);
-        setAvailableDates(dates);
-      })
-      .catch((error) => {
-        console.error("Errore nel recupero delle disponibilità", error);
-        if (axios.isAxiosError(error) && error.response?.status === 403) {
-          console.log("Accesso negato. Reindirizzamento al login.");
-          navigate("/login");
-        }
-      })
-      .finally(() => setLoading(false));
-  } else {
-    setDisponibilitaList([]);
-    setAvailableDates([]);
-  }
-}, [selectedPrestazioneId, selectedMedicoId, navigate]);
-
-  const tileClassName = ({ date, view }: { date: Date; view: string }) => {
-    if (
-      view === "month" &&
-      availableDates.some(
-        (d) => new Date(d).toDateString() === date.toDateString()
-      )
-    ) {
-      return "available-day";
+        axios.get<Disponibilita[]>(`${API_BASE_URL}/disponibilita/available?prestazioneId=${selectedPrestazioneId}&medicoId=${selectedMedicoId}`, { headers })
+            .then((response) => {
+                setDisponibilitaList(response.data);
+                const dates = response.data.map((slot) => slot.data);
+                setAvailableDates(dates);
+            })
+            .catch((error) => console.error("Errore nel recupero delle disponibilità", error))
+            .finally(() => setLoading(false));
+    } else {
+        setDisponibilitaList([]);
+        setAvailableDates([]);
     }
-    return null;
-  };
-
-  const selectedSlots = disponibilitaList.filter(
-    (slot) => new Date(slot.data).toDateString() === date.toDateString()
-  );
+  }, [selectedPrestazioneId, selectedMedicoId, user]);
 
   const handleBooking = async (disponibilitaId: number) => {
     setError(null);
     setSuccess(null);
-    const token = localStorage.getItem("jwtToken");
 
-    if (!token) {
-      setError("Devi essere loggato per prenotare un appuntamento.");
-      navigate("/login");
-      return;
+    if (!user) {
+        setError("Devi essere loggato per prenotare. Sarai reindirizzato al login.");
+        setTimeout(() => navigate("/login"), 2000);
+        return;
     }
-
-    // Trova la prestazione selezionata per determinare il suo tipo
-    const prestazione = prestazioniList.find(
-      (p) => p.id === parseInt(selectedPrestazioneId)
-    );
+    
+    const prestazione = prestazioniList.find(p => p.id === parseInt(selectedPrestazioneId));
     if (!prestazione) {
-      setError("Prestazione non trovata. Impossibile prenotare.");
-      return;
+        setError("Prestazione non trovata. Impossibile prenotare.");
+        return;
     }
 
     try {
-      // Passa il tipo di appuntamento basato sulla prestazione
-      const response = await axios.post(
-        `${API_BASE_URL}/appuntamenti/prenota?disponibilitaId=${disponibilitaId}&tipo=${prestazione.tipoPrestazione}`,
-        null,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      setSuccess("Appuntamento prenotato con successo!");
-      console.log("Appuntamento prenotato:", response.data);
-      // Reindirizza l'utente dopo la prenotazione
-      navigate("/dashboard");
+        await axios.post(
+            `${API_BASE_URL}/appuntamenti/prenota?disponibilitaId=${disponibilitaId}&tipo=${prestazione.tipoPrestazione}`,
+            null,
+            { headers: { Authorization: `Bearer ${user.token}` } }
+        );
+        setSuccess("Appuntamento prenotato con successo! Sarai reindirizzato alla tua dashboard.");
+        
+        setTimeout(() => navigate("/paziente-dashboard"), 2000);
+
     } catch (err) {
-      if (axios.isAxiosError(err) && err.response) {
-        setError(err.response.data || "Errore nella prenotazione. Riprova.");
-      } else {
-        setError("Errore di rete. Controlla la tua connessione.");
-      }
+        setError("Errore durante la prenotazione. Riprova.");
+        console.error("Errore di prenotazione:", err);
     }
   };
+
+  const tileClassName = ({ date, view }: { date: Date; view: string }) => {
+    if (view === "month" && availableDates.some(d => new Date(d).toDateString() === date.toDateString())) {
+        return "available-day";
+    }
+    return null;
+  };
+
+  const selectedSlots = disponibilitaList.filter(slot => new Date(slot.data).toDateString() === date.toDateString());
 
   return (
     <div className="container mt-5">
@@ -282,7 +241,7 @@ const BookingCalendar: React.FC = () => {
                   {selectedSlots.length > 0 && (
                     <div className="mt-4">
                       <h4 className="text-center">
-                        Disponibilità per il {date.toLocaleDateString()}
+                        Disponibilità per il {date.toLocaleDateString('it-IT')}
                       </h4>
                       <ul className="list-group">
                         {selectedSlots.map((slot) => (

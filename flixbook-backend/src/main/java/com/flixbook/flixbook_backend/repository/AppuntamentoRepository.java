@@ -14,20 +14,37 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface AppuntamentoRepository extends JpaRepository<Appuntamento, Long> {
-    @Query("SELECT a FROM Appuntamento a " +
-            "WHERE (a.dataEOraInizio < :now) " +
-            "AND a.stato = 'confermato'")
-    List<Appuntamento> findCompletedAppointments(@Param("now") LocalDateTime now);
 
-    @Query("SELECT a FROM Appuntamento a WHERE a.paziente.email = :email")
-    List<Appuntamento> findByPazienteEmail(@Param("email") String email);
+    /**
+     * Trova gli appuntamenti confermati la cui data di fine è passata.
+     * Usa un parametro Enum per la sicurezza dei tipi, invece di una stringa hardcoded.
+     */
+    @Query("SELECT a FROM Appuntamento a WHERE a.dataEOraFine < :now AND a.stato = :stato")
+    List<Appuntamento> findAppointmentsToUpdateStatus(@Param("now") LocalDateTime now, @Param("stato") StatoAppuntamento stato);
 
-    List<Appuntamento> findByDisponibilita_Medico_Email(String medicoEmail);
+    /**
+     * Trova tutti gli appuntamenti di un paziente usando la sua email.
+     */
+    List<Appuntamento> findByPazienteEmail(String email);
 
-    // Questo è il metodo corretto per trovare gli appuntamenti basati sulla disponibilità
-    List<Appuntamento> findByDisponibilita(Disponibilita disponibilita);
-    List<Appuntamento> findByDataEOraInizioBetweenAndReminderInviatoIsFalse(LocalDateTime start, LocalDateTime end);
-    List<Appuntamento> findByDataEOraInizioBetweenAndReminderInviatoIsFalseAndSmsReminderInviatoIsFalse(LocalDateTime start, LocalDateTime end);
+    /**
+     * Trova tutti gli appuntamenti di un medico usando l'ID del medico (tramite la Disponibilita).
+     */
+    @Query("SELECT a FROM Appuntamento a WHERE a.disponibilita.medico.id = :medicoId")
+    List<Appuntamento> findAppuntamentiByMedicoId(@Param("medicoId") Long medicoId);
+
+    /**
+     * Trova gli appuntamenti per i quali deve essere inviato un promemoria (email O SMS).
+     * Cerca appuntamenti confermati, nella finestra temporale corretta,
+     * per cui almeno uno dei due promemoria non è ancora stato inviato.
+     */
+    @Query("SELECT a FROM Appuntamento a WHERE a.stato = com.flixbook.flixbook_backend.model.StatoAppuntamento.CONFERMATO " +
+           "AND (a.reminderInviato = false OR a.smsReminderInviato = false) " +
+           "AND a.dataEOraInizio BETWEEN :start AND :end")
+    List<Appuntamento> findAppuntamentiPerPromemoria(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+    List<Appuntamento> findByDataEOraInizioBetweenAndReminderInviatoIsFalseAndSmsReminderInviatoIsFalse(
+        LocalDateTime inizioIntervallo, LocalDateTime fineIntervallo
+    );
     List<Appuntamento> findByStatoAndFeedbackInviatoIsFalse(StatoAppuntamento stato);
-
+    List<Appuntamento> findByDisponibilita(Disponibilita disponibilita);
 }

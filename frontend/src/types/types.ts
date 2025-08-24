@@ -18,6 +18,7 @@ export interface Disponibilita {
   dataInizio: string;
   dataFine: string;
   attiva: boolean;
+  prenotato: boolean; 
 }
 
 export interface Paziente {

@@ -2,308 +2,221 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import "bootstrap/dist/css/bootstrap.min.css";
-import type {
-  Medico,
-  Appuntamento,
-  Prestazione,
-  Paziente,
-} from "../types/types";
+import { useAuth } from '../context/useAuth';
+
+// --- Interfacce ---
+interface Medico { id: number; nome: string; cognome: string; email: string; }
+interface Paziente { id: number; nome: string; cognome: string; }
+interface Prestazione { id: number; nome: string; costo: number; }
+interface Disponibilita { id: number; data: string; oraInizio: string; oraFine: string; medico: Medico; prestazione: Prestazione; prenotato: boolean; }
+interface Appuntamento { id: number; dataEOraInizio: string; dataEOraFine: string; stato: 'CONFERMATO' | 'COMPLETATO' | 'ANNULLATO'; tipoAppuntamento: 'fisico' | 'virtuale'; paziente: Paziente; disponibilita: Disponibilita; linkVideocall?: string; }
+
 
 const API_BASE_URL = "http://localhost:8080/api";
 
-// Interfaccia per la disponibilità con l'aggiunta di paziente e prestazione
-interface Disponibilita {
-  id: number;
-  data: string;
-  oraInizio: string;
-  oraFine: string;
-  medico: Medico;
-  prestazione: Prestazione & { costo: number };
-  dataInizio: string;
-  dataFine: string;
-  attiva: boolean;
-}
-
-// Interfaccia per l'appuntamento con tutti i campi necessari
-interface AppuntamentoDetails extends Appuntamento {
-  paziente: Paziente;
-  disponibilita: Disponibilita;
-}
-
 const MedicoDashboard = () => {
-  const [profile, setProfile] = useState<Medico | null>(null);
-  const [appuntamenti, setAppuntamenti] = useState<AppuntamentoDetails[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [disponibilitaList, setDisponibilitaList] = useState<Disponibilita[]>(
-    []
-  );
-  const [error, setError] = useState<string | null>(null);
-  const navigate = useNavigate();
+    const { user } = useAuth();
+    const navigate = useNavigate();
+    
+    const [profile, setProfile] = useState<Medico | null>(null);
+    const [appuntamenti, setAppuntamenti] = useState<Appuntamento[]>([]);
+    const [disponibilitaList, setDisponibilitaList] = useState<Disponibilita[]>([]);
+    const [loading, setLoading] = useState<boolean>(true);
+    const [error, setError] = useState<string | null>(null);
 
-  // Funzione per il recupero di tutti i dati
-  useEffect(() => {
-    const token = localStorage.getItem("jwtToken");
-    if (!token) {
-      navigate("/login");
-      return;
-    }
+    useEffect(() => {
+        if (!user || !user.medicoId) {
+            setLoading(false);
+            return;
+        }
 
-    const fetchAllData = async () => {
-      setLoading(true);
-      setError(null);
+        const fetchAllData = async () => {
+            setLoading(true);
+            setError(null);
+            
+            const headers = { Authorization: `Bearer ${user.token}` };
+            const medicoId = user.medicoId;
 
-      const config = {
-        headers: { Authorization: `Bearer ${token}` },
-      };
+            try {
+                const [profileResponse, appuntamentiResponse, disponibilitaResponse] =
+                    await Promise.all([
+                        axios.get(`${API_BASE_URL}/medici/profile`, { headers }),
+                        axios.get(`${API_BASE_URL}/appuntamenti/medico/${medicoId}`, { headers }),
+                        axios.get(`${API_BASE_URL}/disponibilita/medico/${medicoId}`, { headers }),
+                    ]);
 
-      try {
-        const [profileResponse, appuntamentiResponse, disponibilitaResponse] =
-          await Promise.all([
-            axios.get(`${API_BASE_URL}/medici/profile`, config),
-            axios.get(`${API_BASE_URL}/appuntamenti/medico`, config),
-            axios.get(`${API_BASE_URL}/disponibilita/medico`, config),
-          ]);
+                setProfile(profileResponse.data);
+                setAppuntamenti(appuntamentiResponse.data);
+                setDisponibilitaList(disponibilitaResponse.data);
 
-        setProfile(profileResponse.data);
-        setAppuntamenti(appuntamentiResponse.data);
-        setDisponibilitaList(disponibilitaResponse.data);
-      } catch (err) {
-        console.error("Errore nel recupero dei dati:", err);
-        setError("Impossibile caricare i dati. Riprova più tardi.");
-      } finally {
-        setLoading(false);
-      }
+            } catch (err) {
+                console.error("Errore nel recupero dei dati:", err);
+                setError("Impossibile caricare i dati.");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchAllData();
+    }, [user]);
+
+    const handleAnnullaAppuntamento = async (appuntamentoId: number) => {
+        if (!window.confirm("Sei sicuro di voler annullare questo appuntamento?") || !user) {
+          return;
+        }
+    
+        try {
+          await axios.put(
+            `${API_BASE_URL}/appuntamenti/medico/annulla/${appuntamentoId}`,
+            null,
+            { headers: { Authorization: `Bearer ${user.token}` } }
+          );
+          alert("Appuntamento annullato con successo!");
+    
+          setAppuntamenti(prev =>
+            prev.map((app) =>
+              app.id === appuntamentoId
+                ? { ...app, stato: "ANNULLATO" }
+                : app
+            )
+          );
+        } catch (err) {
+          console.error("Errore nell'annullamento dell'appuntamento", err);
+          alert("Errore durante l'annullamento.");
+        }
     };
 
-    fetchAllData();
-  }, [navigate]);
-
-  // Funzione per gestire l'annullamento di un appuntamento
-  const handleAnnulla = async (appuntamentoId: number) => {
-    if (!window.confirm("Sei sicuro di voler annullare questo appuntamento?")) {
-      return;
-    }
-
-    const token = localStorage.getItem("jwtToken");
-    try {
-      await axios.put(
-        `${API_BASE_URL}/appuntamenti/medico/annulla/${appuntamentoId}`,
-        null,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      alert("Appuntamento annullato con successo!");
-
-      // Aggiorna lo stato dell'appuntamento nel frontend senza ricaricare la pagina
-      const updatedAppuntamenti = appuntamenti.map((app) =>
-        app.id === appuntamentoId
-          ? { ...app, stato: "annullato" as const }
-          : app
-      );
-      setAppuntamenti(updatedAppuntamenti);
-    } catch (err) {
-      console.error("Errore nell'annullamento dell'appuntamento", err);
-      if (axios.isAxiosError(err) && err.response) {
-        alert(`Errore: ${err.response.data}`);
-      } else {
-        alert("Errore nell'annullamento. Riprova.");
-      }
-    }
-  };
-
-  // NUOVO: Funzione per eliminare una disponibilità
-  // Funzione per eliminare una disponibilità
     const handleEliminaDisponibilita = async (disponibilitaId: number) => {
-        if (!window.confirm("Sei sicuro di voler eliminare questa disponibilità?")) {
+        if (!window.confirm("Sei sicuro di voler eliminare questa disponibilità?") || !user) {
             return;
         }
     
-        const token = localStorage.getItem("jwtToken");
         try {
             await axios.delete(`${API_BASE_URL}/disponibilita/medico/${disponibilitaId}`, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { Authorization: `Bearer ${user.token}` }
             });
             alert("Disponibilità eliminata con successo!");
             
-            // Aggiorna lo stato nel frontend
-            const updatedList = disponibilitaList.filter(disp => disp.id !== disponibilitaId);
-            setDisponibilitaList(updatedList);
+            setDisponibilitaList(prev => prev.filter(disp => disp.id !== disponibilitaId));
         } catch (err) {
             console.error("Errore nell'eliminazione della disponibilità", err);
-            if (axios.isAxiosError(err) && err.response) {
-                alert(`Errore: ${err.response.data}`);
-            } else {
-                alert("Errore nell'eliminazione. Riprova.");
-            }
+            alert("Errore durante l'eliminazione.");
         }
     };
 
-  // Funzione per reindirizzare alla creazione delle disponibilità
-  const handleRedirectToCreate = () => {
-    navigate("/medico/create-disponibilita");
-  };
+    const handleRedirectToCreate = () => {
+        navigate("/medico/create-disponibilita");
+    };
 
-  if (loading) {
-    return <div className="text-center mt-5">Caricamento dati...</div>;
-  }
+    if (loading) return <div className="text-center mt-5"><h3>Caricamento...</h3></div>;
+    if (error) return <div className="alert alert-danger mt-5">{error}</div>;
 
-  if (error) {
-    return <div className="alert alert-danger mt-5">{error}</div>;
-  }
-
-  return (
-    <div className="container mt-5">
-      <h1 className="text-center mb-4">Dashboard Medico</h1>
-      <div className="row">
-        <div className="col-md-6 mb-4">
-          <div className="card shadow-sm h-100">
-            <div className="card-body text-center">
-              <h4 className="card-title">Il tuo profilo</h4>
-              {profile && (
-                <>
-                  <p className="lead mt-3">
-                    {profile.nome} {profile.cognome}
-                  </p>
-                  <p className="text-muted">{profile.email}</p>
-                </>
-              )}
-              <button
-                className="btn btn-primary mt-3"
-                onClick={handleRedirectToCreate}
-              >
-                Gestisci le tue disponibilità
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="col-md-6 mb-4">
-          <div className="card shadow-sm h-100">
-            <div className="card-body">
-              <h4 className="card-title text-center">Appuntamenti prenotati</h4>
-              {appuntamenti.length > 0 ? (
-                <ul className="list-group list-group-flush mt-3">
-                  {appuntamenti.map((app) => (
-                    <li
-                      key={app.id}
-                      className="list-group-item d-flex flex-column flex-sm-row justify-content-between align-items-center"
-                    >
-                      <div className="text-start">
-                        <strong>
-                          {new Date(app.dataEOraInizio).toLocaleDateString()}
-                        </strong>{" "}
-                        alle{" "}
-                        <strong>
-                          {new Date(app.dataEOraInizio).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </strong>
-                        <br />
-                        <small className="text-muted">
-                          Paziente: {app.paziente.nome} {app.paziente.cognome}
-                        </small>
-                        <br />
-                        <small className="text-muted">
-                          Prestazione: {app.disponibilita.prestazione.nome}
-                        </small>
-                        <br />
-                        <span
-                          className={`badge ${
-                            app.stato === "confermato"
-                              ? "bg-success"
-                              : app.stato === "completato"
-                              ? "bg-secondary"
-                              : "bg-danger"
-                          }`}
-                        >
-                          {app.stato}
-                        </span>
-                        {app.tipoAppuntamento === "virtuale" &&
-                          app.stato === "confermato" &&
-                          app.linkVideocall && (
-                            <div className="mt-2">
-                              <a
-                                href={app.linkVideocall}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="btn btn-sm btn-info"
-                              >
-                                Vai alla Videocall
-                              </a>
-                              <p className="mt-2 text-info">
-                                Clicca sul link e attendi l'accesso del paziente
-                                per accettarlo nella stanza.
-                              </p>
-                            </div>
-                          )}
-                      </div>
-                      {app.stato === "confermato" && (
-                        <button
-                          className="btn btn-danger btn-sm mt-2 mt-sm-0"
-                          onClick={() => handleAnnulla(app.id)}
-                        >
-                          Annulla Appuntamento
-                        </button>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <div className="alert alert-info text-center mt-3">
-                  Nessun appuntamento prenotato.
+    return (
+        <div className="container mt-5">
+            <h1 className="text-center mb-4">Dashboard Medico</h1>
+            <div className="row">
+                <div className="col-lg-5 mb-4">
+                    <div className="card shadow-sm h-100">
+                        <div className="card-body text-center d-flex flex-column justify-content-center">
+                            <h4 className="card-title">Il tuo profilo</h4>
+                            {profile ? (
+                                <>
+                                    <p className="lead mt-3 mb-1">{profile.nome} {profile.cognome}</p>
+                                    <p className="text-muted">{profile.email}</p>
+                                </>
+                            ) : <p>Caricamento...</p>}
+                            <button className="btn btn-primary mt-3" onClick={handleRedirectToCreate}>
+                                Gestisci disponibilità
+                            </button>
+                        </div>
+                    </div>
                 </div>
-              )}
-            </div>
-          </div>
-        </div>
-        <div className="col-12 mb-4">
-          <div className="card shadow-sm h-100">
-            <div className="card-body">
-              <h4 className="card-title text-center">
-                Le tue disponibilità attive
-              </h4>
-              {disponibilitaList.length > 0 ? (
-                <ul className="list-group list-group-flush mt-3">
-                  {disponibilitaList.map((disp) => (
-                    <li
-                      key={disp.id}
-                      className="list-group-item d-flex flex-column flex-sm-row justify-content-between align-items-center"
-                    >
-                      <div className="text-start">
-                        <strong>
-                          {new Date(disp.data).toLocaleDateString()}
-                        </strong>{" "}
-                        dalle{" "}
-                        <strong>{disp.oraInizio}</strong> alle{" "}
-                        <strong>{disp.oraFine}</strong>
-                        <br />
-                        <small className="text-muted">
-                          Prestazione: {disp.prestazione.nome} (€
-                          {disp.prestazione.costo})
-                        </small>
-                      </div>
-                      <button
-                        className="btn btn-danger btn-sm mt-2 mt-sm-0"
-                        onClick={() => handleEliminaDisponibilita(disp.id)}
-                      >
-                        Elimina Disponibilità
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <div className="alert alert-info text-center mt-3">
-                  Nessuna disponibilità attiva trovata.
+
+                <div className="col-lg-7 mb-4">
+                    <div className="card shadow-sm h-100">
+                        <div className="card-body">
+                            <h4 className="card-title text-center">Appuntamenti prenotati</h4>
+                            {appuntamenti.length > 0 ? (
+                                <ul className="list-group list-group-flush mt-3">
+                                    {appuntamenti.map((app) => (
+                                        <li key={app.id} className="list-group-item">
+                                            <div className="d-flex w-100 justify-content-between">
+                                                <div>
+                                                    <strong>{new Date(app.dataEOraInizio).toLocaleDateString('it-IT', { day: '2-digit', month: 'long' })}</strong> alle <strong>{new Date(app.dataEOraInizio).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong>
+                                                    <br />
+                                                    <small className="text-muted">Paziente: {app.paziente.nome} {app.paziente.cognome}</small>
+                                                    <br />
+                                                    <small className="text-muted">Prestazione: {app.disponibilita.prestazione.nome}</small>
+                                                </div>
+                                                <span className={`badge text-capitalize text-bg-${app.stato === 'CONFERMATO' ? 'success' : app.stato === 'COMPLETATO' ? 'secondary' : 'danger'}`}>{app.stato.toLowerCase()}</span>
+                                            </div>
+                                            <div className="mt-2 d-flex gap-2">
+                                                {app.tipoAppuntamento === 'virtuale' && app.stato === 'CONFERMATO' && app.linkVideocall && (
+                                                    <a href={app.linkVideocall} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-info">
+                                                        Vai alla Videocall
+                                                    </a>
+                                                )}
+                                                {app.stato === 'CONFERMATO' && (
+                                                    <button className="btn btn-danger btn-sm" onClick={() => handleAnnullaAppuntamento(app.id)}>
+                                                        Annulla
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <div className="alert alert-info text-center mt-3">
+                                    Nessun appuntamento prenotato.
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
-              )}
             </div>
-          </div>
+
+            <div className="row">
+                <div className="col-12 mb-4">
+                    <div className="card shadow-sm">
+                        <div className="card-body">
+                            <h4 className="card-title text-center">Le tue disponibilità attive</h4>
+                            {disponibilitaList.length > 0 ? (
+                                <ul className="list-group list-group-flush mt-3">
+                                    {disponibilitaList.map((disp) => (
+                                        <li key={disp.id} className="list-group-item d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <strong>{new Date(disp.data).toLocaleDateString('it-IT')}</strong> dalle <strong>{disp.oraInizio}</strong> alle <strong>{disp.oraFine}</strong>
+                                                <br/>
+                                                <small className="text-muted">Prestazione: {disp.prestazione.nome} ({disp.prestazione.costo}€)</small>
+                                                <br/>
+                                                {disp.prenotato ? (
+                                                    <span className="badge bg-secondary">Prenotata</span>
+                                                ) : (
+                                                    <span className="badge bg-success">Libera</span>
+                                                )}
+                                            </div>
+                                            <button 
+                                                className="btn btn-outline-danger btn-sm" 
+                                                onClick={() => handleEliminaDisponibilita(disp.id)}
+                                                disabled={disp.prenotato}
+                                                title={disp.prenotato ? "Non puoi eliminare una disponibilità già prenotata" : "Elimina disponibilità"}
+                                            >
+                                                Elimina
+                                            </button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <div className="alert alert-info text-center mt-3">
+                                    Nessuna disponibilità attiva trovata.
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-      </div>
-    </div>
-  );
+    );
 };
 
 export default MedicoDashboard;
