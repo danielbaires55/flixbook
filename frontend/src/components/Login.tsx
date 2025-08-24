@@ -1,63 +1,106 @@
 import React, { useState } from 'react';
-import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/useAuth';
+import './css/Login.css'; 
 
-const Login = () => {
+import axios from 'axios';
+import { useNavigate, useLocation, Link } from 'react-router-dom'; // 1. Aggiungi Link
+import { useAuth } from '../context/useAuth';
+import logoImage from '../assets/logo-notext.png';
+
+
+interface LoginProps {
+  onClose?: () => void;
+  // onRegistratiClick non è più necessario se usiamo un Link diretto
+}
+
+const Login: React.FC<LoginProps> = () => { // Rimosso onRegistratiClick dalle props
+
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState<string | null>(null);
     const navigate = useNavigate();
+    const location = useLocation();
     const { login } = useAuth();
+    
+    const from = location.state?.from?.pathname || null;
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
-        console.log("--- INIZIO DEBUG LOGIN ---");
-        console.log("1. Funzione 'handleLogin' avviata.");
 
         try {
-            console.log("2. Sto per inviare la richiesta ad Axios a 'http://localhost:8080/api/auth/login'");
             const response = await axios.post('http://localhost:8080/api/auth/login', { email, password });
             
-            console.log("3. Richiesta Axios RIUSCITA. Dati ricevuti:", response.data);
-            
-            console.log("4. Sto per chiamare la funzione 'login' del contesto.");
             login(response.data);
-            console.log("5. Funzione 'login' del contesto eseguita.");
-
             const { role } = response.data;
-            const destination = role === 'ROLE_MEDICO' || role === 'ROLE_COLLABORATORE'
-                ? '/medico-dashboard'
-                : '/paziente-dashboard';
 
-            console.log(`6. Ruolo riconosciuto: '${role}'. Sto per reindirizzare a: '${destination}'`);
-            
-            navigate(destination, { replace: true });
-            
-            console.log("7. Reindirizzamento eseguito. Se vedi questo messaggio ma non la pagina, il problema è nel routing di App.tsx.");
-
+            if (from) {
+                navigate(from, { replace: true });
+            } else {
+                if (role === 'ROLE_MEDICO' || role === 'ROLE_COLLABORATORE') {
+                    navigate('/medico-dashboard', { replace: true });
+                } else if (role === 'ROLE_PAZIENTE') {
+                    navigate('/paziente-dashboard', { replace: true });
+                } else {
+                    setError('Ruolo utente non valido.');
+                }
+            }
         } catch (err) {
-            console.error("!!! ERRORE CATTURATO NEL BLOCCO CATCH !!!");
-            console.error(err);
+            console.error("Errore di login:", err);
             setError('Email o password non valide.');
         }
     };
-    
+
     return (
-        <form onSubmit={handleLogin}>
-            <h2>Login</h2>
-            <div>
-                <label>Email:</label>
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        <div className="login-bozza-container">
+            <div className="login-bozza-modal">
+                <div className="login-logo-container">
+                    <img src={logoImage} alt="Logo" className="login-logo" />
+                </div>
+                <h1 className="login-title">Accedi</h1>
+                <form onSubmit={handleLogin} className="login-form">
+                    <div className="form-field">
+                        <label className="field-label">
+                            <span className="required-asterisk">*</span> Email
+                        </label>
+                        <input
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            placeholder="Inserire email"
+                            className="form-input"
+                            required
+                        />
+                    </div>
+
+                    <div className="form-field">
+                        <label className="field-label">
+                            <span className="required-asterisk">*</span> Password
+                        </label>
+                        <input
+                            type="password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            placeholder="Inserire password"
+                            className="form-input"
+                            required
+                        />
+                    </div>
+
+                    {error && <p className="login-error-message">{error}</p>}
+
+                    <button type="submit" className="login-submit-btn">
+                        Accedi
+                    </button>
+                </form>
+
+                <div className="registration-link">
+                    <span className="registration-text">Non hai ancora un account? </span>
+                    <Link to="/register" className="registration-btn">
+                        Registrati
+                    </Link>
+                </div>
             </div>
-            <div>
-                <label>Password:</label>
-                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-            </div>
-            {error && <p style={{ color: 'red' }}>{error}</p>}
-            <button type="submit">Login</button>
-        </form>
+        </div>
     );
 };
 

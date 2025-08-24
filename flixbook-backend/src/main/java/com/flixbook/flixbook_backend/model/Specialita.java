@@ -15,6 +15,8 @@ public class Specialita {
     private Long id;
 
     private String nome;
+    @Column(name = "icon_url")
+    private String iconUrl;
     
     @OneToMany(mappedBy = "specialita")
     @JsonIgnore

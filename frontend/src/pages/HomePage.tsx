@@ -6,15 +6,15 @@ import Footer from "../components/Footer";
 import "./HomePage.css";
 
 export default function HomePage() {
-    return (
-        <div className="homepage-container">
-            <NavBar />
-            <main className="homepage-main">
-                <HeroSection />
-                <MediciSection />
-                <SpecialitaSection />
-            </main>
-            <Footer />
-        </div>
-    );
+  return (
+    <div className="homepage-container">
+      <NavBar />
+      <main className="homepage-main">
+        <HeroSection />
+        <SpecialitaSection />
+        <MediciSection />
+      </main>
+      <Footer />
+    </div>
+  );
 }

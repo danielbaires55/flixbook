@@ -17,7 +17,7 @@ import org.springframework.beans.factory.InitializingBean;
 
 @Service
 @Transactional
-public class AppuntamentoService implements InitializingBean {
+public class AppuntamentoService  {
 
     @Autowired
     private AppuntamentoRepository appuntamentoRepository;
@@ -168,8 +168,7 @@ public class AppuntamentoService implements InitializingBean {
         return appuntamentoRepository.findAppuntamentiByMedicoId(medicoId);
     }
 
-    @Override
-    public void afterPropertiesSet() {
+  public void eseguiTaskDiAvvio() {
         updateCompletedAppointments();
         inviaPromemoriaDiAvvio();
         inviaRichiesteFeedbackDiAvvio();

@@ -24,6 +24,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.Arrays;
 import java.util.List;
 
+
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
@@ -40,9 +41,6 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         
-        // =================================================================================
-        // == BLOCCO DI DEBUG PER CATTURARE L'ERRORE 403 IN MODO DETTAGLIATO             ==
-        // =================================================================================
         AccessDeniedHandler accessDeniedHandler = (request, response, accessDeniedException) -> {
             System.err.println("--- ACCESSO NEGATO (403 FORBIDDEN) ---");
             System.err.println("Endpoint richiesto: " + request.getRequestURI());
@@ -59,14 +57,9 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                
-                // =======================================================================
-                // == AGGIUNGIAMO IL GESTORE DI ECCEZIONI QUI                         ==
-                // =======================================================================
                 .exceptionHandling(exceptions -> exceptions
                     .accessDeniedHandler(accessDeniedHandler)
                 )
-                // =======================================================================
 
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(
@@ -76,7 +69,10 @@ public class SecurityConfig {
                                 "/api/prestazioni/bySpecialita/**",
                                 "/api/medici/info/**",
                                 "/api/medici/byPrestazione/**",
-                                "/api/disponibilita/available"
+                                "/api/disponibilita/available",
+                                "/prof_img/**",
+                                "/api/medici",
+                                "/icons/**"
                         ).permitAll()
                         .requestMatchers(
                                 "/api/medici/**",

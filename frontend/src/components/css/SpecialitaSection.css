@@ -32,6 +32,7 @@
   justify-items: center;
 }
 
+/* --- MODIFICHE ALLA CARD --- */
 .specialty-card {
   display: flex;
   width: 100%;
@@ -42,16 +43,34 @@
   align-items: center;
   gap: 24px;
   border-radius: 16px;
-  border: 1px solid #757070;
+  border: 1px solid #e0e0e0; /* Bordo iniziale più leggero */
   background: #FFF;
   box-sizing: border-box;
   min-height: 180px;
+  cursor: pointer;
+  /* Transizione fluida per l'effetto hover */
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* --- NUOVA REGOLA PER L'HOVER --- */
+.specialty-card:hover {
+  transform: translateY(-5px); /* Solleva leggermente la card */
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1); /* Ombra più pronunciata */
 }
 
 .specialty-icon {
   width: 60px;
   height: 60px;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.specialty-icon img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
 }
 
 .specialty-name {
@@ -65,50 +84,42 @@
   text-align: center;
 }
 
-/* Tablet Styles */
+/* --- Media Queries (invariate) --- */
 @media (max-width: 1024px) {
   .specialita-section {
     padding: 60px 20px;
     gap: 60px;
   }
-
   .specialita-title {
     font-size: 40px;
   }
-
   .specialties-grid {
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     gap: 20px;
   }
 }
 
-/* Mobile Styles */
 @media (max-width: 768px) {
   .specialita-section {
     padding: 40px 20px;
     gap: 40px;
     min-height: auto;
   }
-
   .specialita-title {
     font-size: 32px;
   }
-
   .specialties-grid {
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     gap: 16px;
   }
-
   .specialty-card {
     padding: 24px;
     min-height: 160px;
   }
-
   .specialty-icon {
     width: 50px;
     height: 50px;
   }
-
   .specialty-name {
     font-size: 16px;
   }
@@ -119,28 +130,23 @@
     padding: 32px 16px;
     gap: 32px;
   }
-
   .specialita-title {
     font-size: 28px;
   }
-
   .specialties-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: 12px;
   }
-
   .specialty-card {
     max-width: none;
     padding: 20px;
     min-height: 140px;
     gap: 16px;
   }
-
   .specialty-icon {
     width: 40px;
     height: 40px;
   }
-
   .specialty-name {
     font-size: 14px;
   }

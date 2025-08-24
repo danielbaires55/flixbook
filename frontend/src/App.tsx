@@ -1,93 +1,98 @@
-import './App.css';
-import 'bootstrap/dist/css/bootstrap.min.css';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import "./App.css";
+import "bootstrap/dist/css/bootstrap.min.css";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
 // Importa i tuoi componenti
-import BookingCalendar from './components/BookingCalendar';
-import Login from './components/Login';
-import MedicoDashboard from './components/MedicoDashboard';
-import PazienteDashboard from './components/PazienteDashboard';
-import CreateDisponibilitaForm from './components/CreateDisponibilitaForm';
-import FeedbackForm from './components/FeedbackForm';
-import HomePage from './pages/HomePage';
-import { useAuth } from './context/useAuth'; // Assicurati che il percorso sia corretto
+import BookingCalendar from "./components/BookingCalendar";
+import Login from "./components/Login";
+import MedicoDashboard from "./components/MedicoDashboard";
+import PazienteDashboard from "./components/PazienteDashboard";
+import CreateDisponibilitaForm from "./components/CreateDisponibilitaForm";
+import FeedbackForm from "./components/FeedbackForm";
+import HomePage from "./pages/HomePage";
+import { useAuth } from "./context/useAuth";
+import { useLocation } from "react-router-dom";
+import PazienteRegistrationForm from "./components/RegisterForm";
 
-
-// ====================================================================================
-// VERSIONE CORRETTA E PULITA DI PROTECTEDROUTE
-// ====================================================================================
 type ProtectedRouteProps = {
-    children: React.ReactNode;
-    allowedRoles: string[];
+  children: React.ReactNode;
+  allowedRoles: string[];
 };
 
 const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
-    // 1. Prende l'utente dal Context, che si aggiorna in tempo reale
-    const { user } = useAuth();
-   console.log("ProtectedRoute sta controllando l'utente:", user);
-    // 2. Se non c'è un utente nello stato, reindirizza al login
-    if (!user) {
-        return <Navigate to="/login" replace />;
-    }
+  const { user } = useAuth();
+  const location = useLocation();
+  if (!user) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
 
-    // 3. Se il ruolo dell'utente non è tra quelli permessi, reindirizza alla home
-    if (!allowedRoles.includes(user.role)) {
-        return <Navigate to="/" replace />;
-    }
+  if (!allowedRoles.includes(user.role)) {
+    return <Navigate to="/" replace />;
+  }
 
-    // 4. Se i controlli passano, mostra il componente richiesto
-    return children;
+  return children;
 };
-// ====================================================================================
-
 
 function App() {
-    return (
-        <BrowserRouter>
-            <Routes>
-                {/* Rotte pubbliche */}
-                <Route path="/" element={<HomePage />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/book" element={<BookingCalendar />} />
-                <Route path="/feedback/:appuntamentoId" element={<FeedbackForm />} />
-                
-                {/* Rotte protette */}
+  return (
+    <BrowserRouter>
+      <Routes>
+        {/* Rotte pubbliche */}
+        <Route path="/" element={<HomePage />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/book" element={<BookingCalendar />} />
+        <Route path="/register" element={<PazienteRegistrationForm />} />
 
-                {/* Dashboard per Medico E Collaboratore */}
-                <Route 
-                    path="/medico-dashboard" 
-                    element={
-                        <ProtectedRoute allowedRoles={['ROLE_MEDICO', 'ROLE_COLLABORATORE']}>
-                            <MedicoDashboard />
-                        </ProtectedRoute>
-                    } 
-                />
-                
-                {/* Creazione disponibilità per Medico E Collaboratore */}
-                <Route 
-                    path="/medico/create-disponibilita" 
-                    element={
-                        <ProtectedRoute allowedRoles={['ROLE_MEDICO', 'ROLE_COLLABORATORE']}>
-                            <CreateDisponibilitaForm />
-                        </ProtectedRoute>
-                    } 
-                />
+        {/* Rotte protette */}
 
-                {/* Dashboard per il Paziente */}
-                <Route 
-                    path="/paziente-dashboard" 
-                    element={
-                        <ProtectedRoute allowedRoles={['ROLE_PAZIENTE']}>
-                            <PazienteDashboard />
-                        </ProtectedRoute>
-                    } 
-                />
+        {/* Dashboard per Medico E Collaboratore */}
+        <Route
+          path="/medico-dashboard"
+          element={
+            <ProtectedRoute
+              allowedRoles={["ROLE_MEDICO", "ROLE_COLLABORATORE"]}
+            >
+              <MedicoDashboard />
+            </ProtectedRoute>
+          }
+        />
 
-                {/* Rotta catch-all per reindirizzare URL non validi */}
-                <Route path="*" element={<Navigate to="/" />} />
-            </Routes>
-        </BrowserRouter>
-    );
+        {/* Creazione disponibilità per Medico E Collaboratore */}
+        <Route
+          path="/medico/create-disponibilita"
+          element={
+            <ProtectedRoute
+              allowedRoles={["ROLE_MEDICO", "ROLE_COLLABORATORE"]}
+            >
+              <CreateDisponibilitaForm />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Dashboard per il Paziente */}
+        <Route
+          path="/paziente-dashboard"
+          element={
+            <ProtectedRoute allowedRoles={["ROLE_PAZIENTE"]}>
+              <PazienteDashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Rotta catch-all per reindirizzare URL non validi */}
+        <Route path="*" element={<Navigate to="/" />} />
+
+        <Route
+          path="/feedback/:appuntamentoId"
+          element={
+            <ProtectedRoute allowedRoles={["ROLE_PAZIENTE"]}>
+              <FeedbackForm />
+            </ProtectedRoute>
+          }
+        />
+      </Routes>
+    </BrowserRouter>
+  );
 }
 
 export default App;

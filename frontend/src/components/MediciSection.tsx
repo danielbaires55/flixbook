@@ -1,58 +1,82 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import './css/MediciSection.css';
 
-interface DoctorCardProps {
-  name: string;
-  description: string;
+const API_BASE_URL = 'http://localhost:8080/api';
+
+// 1. Definiamo un'interfaccia completa per il Medico
+interface Medico {
+  id: number;
+  nome: string;
+  cognome: string;
+  biografia: string;
+  imgProfUrl: string; // Il percorso dell'immagine
 }
 
-function DoctorCard({ name, description }: DoctorCardProps) {
+// 2. Aggiorniamo DoctorCard per usare i dati reali, inclusa l'immagine
+interface DoctorCardProps {
+  medico: Medico;
+}
+
+function DoctorCard({ medico }: DoctorCardProps) {
+  // Costruiamo l'URL completo per l'immagine
+  const imageUrl = `${API_BASE_URL.replace("/api", "")}${medico.imgProfUrl}`;
+
   return (
     <div className="doctor-card">
-      <div className="doctor-profile-icon">
-        <svg width="81" height="81" viewBox="0 0 81 81" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="40.5" cy="40.5" r="40" fill="#D9D9D9"/>
-        </svg>
+      <div className="doctor-profile-image">
+        <img 
+          src={imageUrl} 
+          alt={`Profilo del Dr. ${medico.nome} ${medico.cognome}`} 
+        />
       </div>
-      <div className="doctor-name">{name}</div>
-      <div className="doctor-description">{description}</div>
+      <div className="doctor-name">{medico.nome} {medico.cognome}</div>
+      <div className="doctor-description">{medico.biografia}</div>
     </div>
   );
 }
 
 function MediciSection() {
-  const doctors = [
-    {
-      name: "Nome Cognome",
-      description: "Specializzato in cardiologia e malattie cardiovascolari. Vanta 15 anni di esperienza in ospedali di eccellenza."
-    },
-    {
-      name: "Nome Cognome", 
-      description: "Specializzato in cardiologia e malattie cardiovascolari. Vanta 15 anni di esperienza in ospedali di eccellenza."
-    },
-    {
-      name: "Nome Cognome",
-      description: "Specializzato in cardiologia e malattie cardiovascolari. Vanta 15 anni di esperienza in ospedali di eccellenza."
-    },
-    {
-      name: "Nome Cognome",
-      description: "Specializzato in cardiologia e malattie cardiovascolari. Vanta 15 anni di esperienza in ospedali di eccellenza."
-    },
-    {
-      name: "Nome Cognome",
-      description: "Specializzato in cardiologia e malattie cardiovascolari. Vanta 15 anni di esperienza in ospedali di eccellenza."
-    }
-  ];
+  // 3. Usiamo useState per memorizzare la lista dei medici caricata dal backend
+  const [medici, setMedici] = useState<Medico[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // 4. Usiamo useEffect per caricare i dati quando il componente viene montato
+  useEffect(() => {
+    const fetchMedici = async () => {
+      try {
+        setLoading(true);
+        const response = await axios.get<Medico[]>(`${API_BASE_URL}/medici`);
+        setMedici(response.data);
+      } catch (err) {
+        setError('Impossibile caricare la lista dei medici.');
+        console.error('Errore nel recupero dei medici:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMedici();
+  }, []); // L'array vuoto [] assicura che venga eseguito solo una volta
+
+  if (loading) {
+    return <div className="medici-section"><h2 className="medici-title">Caricamento...</h2></div>;
+  }
+
+  if (error) {
+    return <div className="medici-section"><h2 className="medici-title text-danger">{error}</h2></div>;
+  }
 
   return (
     <div className="medici-section">
       <h2 className="medici-title">I nostri medici</h2>
       <div className="doctors-grid">
-        {doctors.map((doctor, index) => (
+        {/* 5. Mappiamo la lista di medici (reale) per creare le card */}
+        {medici.map((medico) => (
           <DoctorCard
-            key={index}
-            name={doctor.name}
-            description={doctor.description}
+            key={medico.id}
+            medico={medico}
           />
         ))}
       </div>
