@@ -27,10 +27,8 @@ public class Medico {
     
     private String biografia;
     private String ruolo = "ROLE_MEDICO";
-
-    // --- AGGIUNGI QUESTO BLOCCO ---
     @OneToMany(
-        mappedBy = "medico", // 'medico' is the field name in the Collaboratore entity
+        mappedBy = "medico", 
         cascade = CascadeType.ALL,
         orphanRemoval = true
     )

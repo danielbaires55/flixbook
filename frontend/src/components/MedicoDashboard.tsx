@@ -15,7 +15,7 @@ interface Appuntamento { id: number; dataEOraInizio: string; dataEOraFine: strin
 const API_BASE_URL = "http://localhost:8080/api";
 
 const MedicoDashboard = () => {
-    const { user } = useAuth();
+    const { user, logout } = useAuth(); // Ottieni anche la funzione di logout
     const navigate = useNavigate();
     
     const [profile, setProfile] = useState<Medico | null>(null);
@@ -108,6 +108,11 @@ const MedicoDashboard = () => {
         navigate("/medico/create-disponibilita");
     };
 
+    const handleLogout = () => {
+        logout();
+        navigate('/'); // Reindirizza alla home page dopo il logout
+    };
+
     if (loading) return <div className="text-center mt-5"><h3>Caricamento...</h3></div>;
     if (error) return <div className="alert alert-danger mt-5">{error}</div>;
 
@@ -127,6 +132,9 @@ const MedicoDashboard = () => {
                             ) : <p>Caricamento...</p>}
                             <button className="btn btn-primary mt-3" onClick={handleRedirectToCreate}>
                                 Gestisci disponibilità
+                            </button>
+                            <button className="btn btn-outline-secondary mt-2" onClick={handleLogout}>
+                                Logout
                             </button>
                         </div>
                     </div>

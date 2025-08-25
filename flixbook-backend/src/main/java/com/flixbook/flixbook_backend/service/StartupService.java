@@ -1,4 +1,3 @@
-// StartupService.java
 package com.flixbook.flixbook_backend.service;
 
 import jakarta.annotation.PostConstruct;
