@@ -5,6 +5,7 @@ import com.flixbook.flixbook_backend.repository.AppuntamentoRepository;
 import com.flixbook.flixbook_backend.repository.MedicoRepository;
 import com.flixbook.flixbook_backend.repository.PazienteRepository;
 import com.flixbook.flixbook_backend.repository.PrestazioneRepository;
+import com.flixbook.flixbook_backend.repository.SlotRepository;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -31,6 +32,8 @@ public class AppuntamentoService implements InitializingBean {
     @Autowired
     private PrestazioneRepository prestazioneRepository;
     @Autowired
+    private SlotRepository slotRepository;
+    @Autowired
     private EmailService emailService;
     @Autowired
     private SmsService smsService;
@@ -55,7 +58,19 @@ public class AppuntamentoService implements InitializingBean {
             throw new IllegalStateException("Questo slot orario non è più disponibile.");
         }
 
-        Appuntamento appuntamento = new Appuntamento();
+        // Validazione forte sullo slot persistito: deve esistere DISPONIBILE
+        slotRepository.lockByMedicoAndStart(medicoId, data.atTime(oraInizio))
+                .ifPresentOrElse(s -> {
+                    if (s.getStato() != SlotStato.DISPONIBILE) {
+                        throw new IllegalStateException("Lo slot selezionato non è disponibile.");
+                    }
+                }, () -> {
+                    // Se lo schema è migrato e i blocchi generano slot, l'assenza indica indisponibilità reale
+                    // Se vuoi permettere prenotazione anche senza slot persistito, rimuovi questo else
+                    throw new IllegalStateException("Nessuno slot disponibile per il medico e l'orario indicati.");
+                });
+
+    Appuntamento appuntamento = new Appuntamento();
         appuntamento.setPaziente(paziente);
         appuntamento.setMedico(medico);
         appuntamento.setPrestazione(prestazione);
@@ -69,7 +84,17 @@ public class AppuntamentoService implements InitializingBean {
             appuntamento.setLinkVideocall("https://meet.jit.si/" + UUID.randomUUID().toString());
         }
         
-        Appuntamento appuntamentoSalvato = appuntamentoRepository.save(appuntamento);
+    // Se esiste uno Slot persistito matching questo intervallo, legalo e marcane lo stato OCCUPATO
+    // Nota: per semplicità cerchiamo per medico+dataInizio
+    // In ambienti concorrenti sarebbe meglio bloccare pessimisticamente o usare una check unica
+        slotRepository.lockByMedicoAndStart(medicoId, appuntamento.getDataEOraInizio())
+                .filter(s -> s.getStato() == SlotStato.DISPONIBILE)
+                .ifPresent(s -> {
+                    appuntamento.setSlot(s);
+                    s.setStato(SlotStato.OCCUPATO);
+                });
+
+    Appuntamento appuntamentoSalvato = appuntamentoRepository.save(appuntamento);
 
         inviaNotificheConferma(paziente, medico, prestazione, appuntamentoSalvato);
 
@@ -104,6 +129,10 @@ public class AppuntamentoService implements InitializingBean {
         }
 
         appuntamento.setStato(StatoAppuntamento.ANNULLATO);
+        // Se legato a uno slot persistito, rimettilo DISPONIBILE
+        if (appuntamento.getSlot() != null) {
+            appuntamento.getSlot().setStato(SlotStato.DISPONIBILE);
+        }
         appuntamentoRepository.save(appuntamento);
     }
 

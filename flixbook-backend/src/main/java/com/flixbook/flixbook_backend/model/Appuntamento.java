@@ -5,6 +5,7 @@ import lombok.*;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import java.time.LocalDateTime;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity
 @Table(name = "appuntamenti")
@@ -51,11 +52,20 @@ public class Appuntamento {
     private LocalDateTime dataPrenotazione;
     
     @Column(name = "reminder_inviato", nullable = false)
+    @Builder.Default
     private boolean reminderInviato = false;
 
     @Column(name = "sms_reminder_inviato", nullable = false)
+    @Builder.Default
     private boolean smsReminderInviato = false;
 
     @Column(name = "feedback_inviato", nullable = false)
+    @Builder.Default
     private boolean feedbackInviato = false;
+
+    // Collegamento facoltativo al nuovo Slot persistito (1:1)
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "slot_id")
+    @JsonIgnore
+    private Slot slot;
 }

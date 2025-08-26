@@ -1,8 +1,8 @@
-import React from 'react';
+import type { ReactNode } from 'react';
 import './css/Button.css';
 
 interface ButtonProps {
-  children: React.ReactNode;
+  children: ReactNode;
   onClick?: () => void;
   type?: 'button' | 'submit' | 'reset';
   disabled?: boolean;

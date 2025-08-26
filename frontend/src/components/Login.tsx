@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState, type FC } from 'react';
 import './css/Login.css'; 
 
 import axios from 'axios';
@@ -12,7 +12,7 @@ interface LoginProps {
   // onRegistratiClick non è più necessario se usiamo un Link diretto
 }
 
-const Login: React.FC<LoginProps> = () => { // Rimosso onRegistratiClick dalle props
+const Login: FC<LoginProps> = () => { // Rimosso onRegistratiClick dalle props
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');

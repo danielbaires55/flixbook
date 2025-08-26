@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
 import "bootstrap/dist/css/bootstrap.min.css";
@@ -107,8 +107,16 @@ const BookingCalendar: React.FC = () => {
     }
   }, [selectedPrestazioneId]);
 
+  // Svuota gli slot mostrati quando cambia il medico selezionato
+  useEffect(() => {
+    setProssimiSlot([]);
+    setSlotDelGiorno([]);
+    setError(null);
+    // il caricamento reale verrà innescato dall'effetto più sotto
+  }, [selectedMedicoId]);
+
   // Funzione per ottenere i prossimi giorni con disponibilità
-  const getProssimiGiorni = (numGiorni: number = 10): string[] => {
+  const getProssimiGiorni = useCallback((numGiorni: number = 10): string[] => {
     const giorni: string[] = [];
     const oggi = new Date();
     
@@ -119,10 +127,10 @@ const BookingCalendar: React.FC = () => {
     }
     
     return giorni;
-  };
+  }, []);
 
   // Funzione per caricare i primi 5 slot realmente disponibili
-  const caricaPrimiSlotDisponibili = async () => {
+  const caricaPrimiSlotDisponibili = useCallback(async () => {
     if (!selectedPrestazioneId) return;
 
     setLoadingSlots(true);
@@ -190,14 +198,14 @@ const BookingCalendar: React.FC = () => {
     } finally {
       setLoadingSlots(false);
     }
-  };
+  }, [selectedPrestazioneId, selectedMedicoId, mediciList, getProssimiGiorni]);
 
   // Caricamento slot disponibili quando cambia prestazione o medico
   useEffect(() => {
     if (selectedPrestazioneId && mediciList.length > 0) {
       caricaPrimiSlotDisponibili();
     }
-  }, [selectedPrestazioneId, selectedMedicoId, mediciList]);
+  }, [selectedPrestazioneId, selectedMedicoId, mediciList, caricaPrimiSlotDisponibili]);
 
   const handleDateClick = (date: Date) => {
     setSelectedDate(date);
@@ -229,6 +237,12 @@ const BookingCalendar: React.FC = () => {
   ) => {
     if (!user) {
       navigate("/login");
+      return;
+    }
+
+    // Sicurezza lato client: se è selezionato un medico, non permettere prenotazione di slot di un altro medico
+    if (selectedMedicoId && String(slot.medicoId) !== selectedMedicoId) {
+      alert("Il medico selezionato non corrisponde allo slot. Ricarica gli slot e riprova.");
       return;
     }
 
@@ -353,7 +367,10 @@ const BookingCalendar: React.FC = () => {
                       </li>
                     )}
                     
-                    {prossimiSlot.map((slot, index) => {
+                    {(selectedMedicoId
+                        ? prossimiSlot.filter(s => s.medicoId === parseInt(selectedMedicoId))
+                        : prossimiSlot
+                      ).map((slot, index) => {
                       const dataSlot = new Date(`${slot.data}T${slot.oraInizio}`);
                       const isOggi = slot.data === toYYYYMMDD(new Date());
                       

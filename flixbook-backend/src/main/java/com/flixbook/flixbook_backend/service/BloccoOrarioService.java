@@ -3,6 +3,9 @@ package com.flixbook.flixbook_backend.service;
 import com.flixbook.flixbook_backend.model.BloccoOrario;
 import com.flixbook.flixbook_backend.model.Medico;
 import com.flixbook.flixbook_backend.repository.AppuntamentoRepository;
+import com.flixbook.flixbook_backend.repository.SlotRepository;
+import com.flixbook.flixbook_backend.model.Slot;
+import com.flixbook.flixbook_backend.model.SlotStato;
 import com.flixbook.flixbook_backend.repository.BloccoOrarioRepository;
 import com.flixbook.flixbook_backend.repository.MedicoRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +31,9 @@ public class BloccoOrarioService {
     @Autowired
     private AppuntamentoRepository appuntamentoRepository;
 
+    @Autowired
+    private SlotRepository slotRepository;
+
     /**
      * Crea un nuovo blocco orario per un medico.
      */
@@ -43,7 +49,27 @@ public class BloccoOrarioService {
         blocco.setOraInizio(LocalTime.parse(oraInizio));
         blocco.setOraFine(LocalTime.parse(oraFine));
 
-        return bloccoOrarioRepository.save(blocco);
+        BloccoOrario salvato = bloccoOrarioRepository.save(blocco);
+
+        // Genera gli slot da 30 minuti nel blocco
+        LocalDateTime inizio = LocalDateTime.of(data, salvato.getOraInizio());
+        LocalDateTime fine = LocalDateTime.of(data, salvato.getOraFine());
+        LocalDateTime cursor = inizio;
+        while (!cursor.plusMinutes(30).isAfter(fine)) {
+            // evita duplicati su riavvii o sovrapposizioni
+            if (!slotRepository.existsByMedico_IdAndDataEOraInizio(medicoId, cursor)) {
+                Slot s = new Slot();
+                s.setMedico(medico);
+                s.setBloccoOrario(salvato);
+                s.setDataEOraInizio(cursor);
+                s.setDataEOraFine(cursor.plusMinutes(30));
+                s.setStato(SlotStato.DISPONIBILE);
+                slotRepository.save(s);
+            }
+            cursor = cursor.plusMinutes(30);
+        }
+
+        return salvato;
     }
 
     /**
@@ -76,6 +102,11 @@ public class BloccoOrarioService {
             throw new IllegalStateException("Impossibile cancellare un blocco orario che contiene già appuntamenti prenotati.");
         }
 
+        // Se passati i controlli, rimuovi anche eventuali slot generati per questo blocco
+        List<Slot> slotsDelBlocco = slotRepository.findByBloccoOrarioIdOrderByDataEOraInizio(bloccoId);
+        if (!slotsDelBlocco.isEmpty()) {
+            slotRepository.deleteAll(slotsDelBlocco);
+        }
         bloccoOrarioRepository.delete(blocco);
     }
 }

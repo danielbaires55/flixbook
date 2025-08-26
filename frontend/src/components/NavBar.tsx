@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState, type FC } from 'react';
 import './css/NavBar.css'; // Assicurati che il percorso del CSS sia corretto
 import logo from '../assets/logo-notext.png';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
@@ -12,7 +12,7 @@ interface NavBarProps {
   onContattiClick?: () => void;
 }
 
-const NavBar: React.FC<NavBarProps> = ({ onSpecialitaClick, onMediciClick, onContattiClick }) => {
+const NavBar: FC<NavBarProps> = ({ onSpecialitaClick, onMediciClick, onContattiClick }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { user, logout } = useAuth();
   const navigate = useNavigate();

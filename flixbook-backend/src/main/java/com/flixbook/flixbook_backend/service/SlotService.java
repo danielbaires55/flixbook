@@ -5,10 +5,13 @@ import com.flixbook.flixbook_backend.model.BloccoOrario;
 import com.flixbook.flixbook_backend.model.Medico;
 import com.flixbook.flixbook_backend.model.Prestazione;
 import com.flixbook.flixbook_backend.model.StatoAppuntamento;
+import com.flixbook.flixbook_backend.model.Slot;
+import com.flixbook.flixbook_backend.model.SlotStato;
 import com.flixbook.flixbook_backend.repository.AppuntamentoRepository;
 import com.flixbook.flixbook_backend.repository.BloccoOrarioRepository;
 import com.flixbook.flixbook_backend.repository.MedicoRepository;
 import com.flixbook.flixbook_backend.repository.PrestazioneRepository;
+import com.flixbook.flixbook_backend.repository.SlotRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,37 +38,62 @@ public class SlotService {
     private PrestazioneRepository prestazioneRepository;
     @Autowired
     private MedicoRepository medicoRepository;
+    @Autowired
+    private SlotRepository slotRepository;
+    @Autowired
+    private AppuntamentoRepository appuntamentoRepo;
 
     public List<LocalTime> findAvailableSlots(Long medicoId, Long prestazioneId, LocalDate data) {
         Prestazione prestazione = prestazioneRepository.findById(prestazioneId)
                 .orElseThrow(() -> new IllegalArgumentException("Prestazione non trovata."));
         int durata = prestazione.getDurataMinuti();
 
+        // 1) Se esistono Slot persistiti per quel medico e giorno, usali come fonte di verità
+        List<Slot> slotsDelGiorno = slotRepository.findByMedicoIdAndData(medicoId, data);
+        LocalDateTime inizioGiornata = data.atStartOfDay();
+        LocalDateTime fineGiornata = data.atTime(LocalTime.MAX);
+        List<Appuntamento> appuntamentiEsistenti = appuntamentoRepository
+                .findByMedicoIdAndDataEOraInizioBetween(medicoId, inizioGiornata, fineGiornata);
+
+        if (!slotsDelGiorno.isEmpty()) {
+            List<LocalTime> slotDisponibili = new ArrayList<>();
+            for (Slot s : slotsDelGiorno) {
+                if (s.getStato() != SlotStato.DISPONIBILE) continue; // rispetta DISABILITATO
+                // Escludi slot che si sovrappongono ad appuntamenti confermati
+                boolean occupato = false;
+                for (Appuntamento app : appuntamentiEsistenti) {
+                    if (app.getStato() != StatoAppuntamento.CONFERMATO) continue;
+                    if (!s.getDataEOraInizio().isBefore(app.getDataEOraFine()) ||
+                        !s.getDataEOraFine().isAfter(app.getDataEOraInizio())) {
+                        continue;
+                    }
+                    occupato = true;
+                    break;
+                }
+                if (!occupato) {
+                    slotDisponibili.add(s.getDataEOraInizio().toLocalTime());
+                }
+            }
+            slotDisponibili.sort(LocalTime::compareTo);
+            return slotDisponibili;
+        }
+
+        // 2) Fallback legacy: non esistono slot persistiti, calcola dagli orari di blocco
         List<BloccoOrario> blocchiDiLavoro = bloccoOrarioRepository.findByMedicoIdAndData(medicoId, data);
         if (blocchiDiLavoro.isEmpty()) {
             return new ArrayList<>();
         }
 
-        // ORDINA I BLOCCHI PER ORA DI INIZIO
         blocchiDiLavoro.sort(Comparator.comparing(BloccoOrario::getOraInizio));
-
-        LocalDateTime inizioGiornata = data.atStartOfDay();
-        LocalDateTime fineGiornata = data.atTime(LocalTime.MAX);
-        List<Appuntamento> appuntamentiEsistenti = appuntamentoRepository.findByMedicoIdAndDataEOraInizioBetween(medicoId, inizioGiornata, fineGiornata);
-
         List<LocalTime> slotDisponibili = new ArrayList<>();
-
         for (BloccoOrario blocco : blocchiDiLavoro) {
             LocalTime potenzialeSlot = blocco.getOraInizio();
             LocalTime fineBlocco = blocco.getOraFine();
-
             while (!potenzialeSlot.plusMinutes(durata).isAfter(fineBlocco)) {
                 LocalTime finePotenzialeSlot = potenzialeSlot.plusMinutes(durata);
                 boolean isOccupato = false;
                 for (Appuntamento app : appuntamentiEsistenti) {
-                    if (app.getStato() != StatoAppuntamento.CONFERMATO) {
-                        continue;
-                    }
+                    if (app.getStato() != StatoAppuntamento.CONFERMATO) continue;
                     LocalTime inizioApp = app.getDataEOraInizio().toLocalTime();
                     LocalTime fineApp = app.getDataEOraFine().toLocalTime();
                     if (potenzialeSlot.isBefore(fineApp) && finePotenzialeSlot.isAfter(inizioApp)) {
@@ -73,14 +101,10 @@ public class SlotService {
                         break;
                     }
                 }
-                if (!isOccupato) {
-                    slotDisponibili.add(potenzialeSlot);
-                }
+                if (!isOccupato) slotDisponibili.add(potenzialeSlot);
                 potenzialeSlot = potenzialeSlot.plusMinutes(durata);
             }
         }
-        
-        // ORDINA GLI SLOT PRIMA DI RESTITUIRLI
         slotDisponibili.sort(LocalTime::compareTo);
         return slotDisponibili;
     }
@@ -92,7 +116,7 @@ public class SlotService {
         List<Map<String, Object>> tuttiSlot = new ArrayList<>();
         LocalDate oggi = LocalDate.now();
         final int NUMERO_SLOT_DA_RESTITUIRE = 5;
-        final int GIORNI_MASSIMI_DI_RICERCA = 14; // Riduci per il debug
+        final int GIORNI_MASSIMI_DI_RICERCA = 14; 
 
         List<Medico> mediciDaControllare;
         if (medicoId != null) {
@@ -191,5 +215,75 @@ public class SlotService {
         slotTrovati.sort(Comparator.comparing(slot -> (LocalTime) slot.get("oraInizio")));
         
         return slotTrovati;
+    }
+
+    // ================== ADMIN (MEDICO) SLOT MANAGEMENT ==================
+    @Transactional
+    public List<Slot> listSlotsByBlocco(Long bloccoId, Long medicoIdOwner) {
+        BloccoOrario blocco = bloccoOrarioRepository.findById(bloccoId)
+                .orElseThrow(() -> new IllegalArgumentException("Blocco orario non trovato."));
+        if (!blocco.getMedico().getId().equals(medicoIdOwner)) {
+            throw new SecurityException("Non autorizzato ad accedere a questi slot.");
+        }
+        List<Slot> esistenti = slotRepository.findByBloccoOrarioIdOrderByDataEOraInizio(bloccoId);
+        if (!esistenti.isEmpty()) return esistenti;
+
+        // Se non esistono ancora (vecchi blocchi), generali ora
+        List<Slot> creati = new ArrayList<>();
+        LocalDateTime inizio = LocalDateTime.of(blocco.getData(), blocco.getOraInizio());
+        LocalDateTime fine = LocalDateTime.of(blocco.getData(), blocco.getOraFine());
+        LocalDateTime cursor = inizio;
+        while (!cursor.plusMinutes(30).isAfter(fine)) {
+            if (!slotRepository.existsByMedico_IdAndDataEOraInizio(medicoIdOwner, cursor)) {
+                Slot s = new Slot();
+                s.setMedico(blocco.getMedico());
+                s.setBloccoOrario(blocco);
+                s.setDataEOraInizio(cursor);
+                s.setDataEOraFine(cursor.plusMinutes(30));
+                s.setStato(com.flixbook.flixbook_backend.model.SlotStato.DISPONIBILE);
+                creati.add(slotRepository.save(s));
+            }
+            cursor = cursor.plusMinutes(30);
+        }
+        return creati;
+    }
+
+    @Transactional
+    public Slot toggleSlot(Long slotId, Long medicoIdOwner) {
+        Slot slot = slotRepository.findById(slotId)
+                .orElseThrow(() -> new IllegalArgumentException("Slot non trovato."));
+        if (!slot.getMedico().getId().equals(medicoIdOwner)) {
+            throw new SecurityException("Non autorizzato a modificare questo slot.");
+        }
+        // Se lo slot è occupato (c'è un appuntamento confermato che sovrappone), vieta il toggle a DISPONIBILE
+        long occupati = appuntamentoRepo.countAppuntamentiInBlocco(
+                medicoIdOwner,
+                slot.getDataEOraInizio(),
+                slot.getDataEOraFine()
+        );
+        if (occupati > 0) {
+            // se è occupato, può solo rimanere DISPONIBILE (non disabilitare per evitare inconsistenza)
+            throw new IllegalStateException("Impossibile modificare uno slot già prenotato.");
+        }
+        slot.setStato(slot.getStato() == SlotStato.DISPONIBILE ? SlotStato.DISABILITATO : SlotStato.DISPONIBILE);
+        return slotRepository.save(slot);
+    }
+
+    @Transactional
+    public void deleteSlot(Long slotId, Long medicoIdOwner) {
+        Slot slot = slotRepository.findById(slotId)
+                .orElseThrow(() -> new IllegalArgumentException("Slot non trovato."));
+        if (!slot.getMedico().getId().equals(medicoIdOwner)) {
+            throw new SecurityException("Non autorizzato a cancellare questo slot.");
+        }
+        long occupati = appuntamentoRepo.countAppuntamentiInBlocco(
+                medicoIdOwner,
+                slot.getDataEOraInizio(),
+                slot.getDataEOraFine()
+        );
+        if (occupati > 0) {
+            throw new IllegalStateException("Impossibile cancellare uno slot prenotato.");
+        }
+        slotRepository.delete(slot);
     }
 }

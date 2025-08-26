@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState, type FC } from "react";
 import axios from "axios";
 import { useNavigate, Link } from "react-router-dom"; // Aggiungi Link
 import "bootstrap/dist/css/bootstrap.min.css";
@@ -6,7 +6,7 @@ import "./css/RegisterForm.css";
 
 const API_BASE_URL = "http://localhost:8080/api";
 
-const PazienteRegistrationForm: React.FC = () => {
+const PazienteRegistrationForm: FC = () => {
   const [formData, setFormData] = useState({
     nome: "",
     cognome: "",

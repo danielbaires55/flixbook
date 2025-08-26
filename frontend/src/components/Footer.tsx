@@ -1,4 +1,3 @@
-import React from 'react';
 import './css/Footer.css';
 import logoImage from '../assets/logo-notext.png';
 

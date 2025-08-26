@@ -48,6 +48,8 @@ public class AppuntamentoController {
             Appuntamento nuovoAppuntamento = appuntamentoService.creaNuovoAppuntamento(
                     pazienteId, medicoId, prestazioneId, data, oraInizio, tipoAppuntamento);
             return new ResponseEntity<>(nuovoAppuntamento, HttpStatus.CREATED);
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState, type FC } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/useAuth';
 import { useNavigate } from 'react-router-dom';
@@ -6,7 +6,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 
 const API_BASE_URL = 'http://localhost:8080/api';
 
-const CreateBloccoOrarioForm: React.FC = () => {
+const CreateBloccoOrarioForm: FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   

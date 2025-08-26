@@ -1,9 +1,9 @@
-import React from 'react';
+import type { FC } from 'react';
 import { Outlet } from 'react-router-dom';
 import NavBar from './NavBar';
 // import Footer from './Footer'; // Se vuoi anche il footer
 
-const DashboardLayout: React.FC = () => {
+const DashboardLayout: FC = () => {
   return (
     <div>
       <NavBar />

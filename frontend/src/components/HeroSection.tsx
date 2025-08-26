@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import './css/HeroSection.css';
 import { useNavigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';

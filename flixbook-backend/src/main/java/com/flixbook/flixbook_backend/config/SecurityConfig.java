@@ -80,7 +80,10 @@ public class SecurityConfig {
                                 "/api/medici/**",
                                 "/api/appuntamenti/medico/**",
                                 "/api/disponibilita/medico/**",
-                                "/api/blocchi-orario/**"
+                                "/api/blocchi-orario/**",
+                                "/api/slots/blocchi/**",
+                                "/api/slots/*/toggle",
+                                "/api/slots/*"
                         ).hasAnyAuthority("ROLE_MEDICO", "ROLE_COLLABORATORE")
                         .requestMatchers(
                                 "/api/pazienti/**",

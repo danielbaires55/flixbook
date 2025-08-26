@@ -78,7 +78,7 @@ const FeedbackForm = () => {
                         <Rating
                             name="valutazione"
                             value={valutazione}
-                            onChange={(event, newValue) => {
+                            onChange={(_event, newValue: number | null) => {
                                 setValutazione(newValue);
                             }}
                             precision={1}

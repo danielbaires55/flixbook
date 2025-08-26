@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, type FC } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/useAuth';
 import 'bootstrap/dist/css/bootstrap.min.css';
+import { Modal, Button } from 'react-bootstrap';
 
 const API_BASE_URL = 'http://localhost:8080/api';
 const SERVER_BASE_URL = 'http://localhost:8080';
@@ -15,14 +16,16 @@ interface MedicoProfile {
   imgProfUrl: string;
 }
 
-const MedicoProfiloPage: React.FC = () => {
+const MedicoProfiloPage: FC = () => {
     const { user } = useAuth();
     const [profile, setProfile] = useState<MedicoProfile | null>(null);
     const [formData, setFormData] = useState({ nome: '', cognome: '', telefono: '', biografia: '' });
     const [passwordData, setPasswordData] = useState({ vecchiaPassword: '', nuovaPassword: '', confermaPassword: '' });
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
-    const [message, setMessage] = useState('');
-    const [error, setError] = useState('');
+    // Modale informativo (successo/errore)
+    const [infoModal, setInfoModal] = useState<{ show: boolean; title: string; message: string; variant?: 'primary' | 'success' | 'danger'; onClose?: () => void }>({ show: false, title: '', message: '' });
+    const openInfo = (title: string, message: string, variant: 'primary' | 'success' | 'danger' = 'primary', onClose?: () => void) => setInfoModal({ show: true, title, message, variant, onClose });
+    const closeInfo = () => { setInfoModal((p) => ({ ...p, show: false })); infoModal.onClose?.(); };
 
     useEffect(() => {
         if (user) {
@@ -50,8 +53,8 @@ const MedicoProfiloPage: React.FC = () => {
     const handleProfileSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!user) return;
-        setMessage('');
-        setError('');
+    // azzera eventuali modali pendenti
+    if (infoModal.show) closeInfo();
         
         try {
             const headers = { Authorization: `Bearer ${user.token}` };
@@ -67,22 +70,21 @@ const MedicoProfiloPage: React.FC = () => {
                 await axios.post(`${API_BASE_URL}/medici/profilo/immagine`, fileUploadData, { headers });
             }
 
-            setMessage('Profilo aggiornato con successo! La pagina verrà ricaricata per mostrare le modifiche.');
+            openInfo('Operazione riuscita', 'Profilo aggiornato con successo! La pagina verrà ricaricata per mostrare le modifiche.', 'success');
             setTimeout(() => window.location.reload(), 2000);
 
         } catch {
-            setError('Errore nell\'aggiornamento del profilo.');
+            openInfo('Errore', "Errore nell'aggiornamento del profilo.", 'danger');
         }
     };
 
     const handlePasswordSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!user) return;
-        setMessage('');
-        setError('');
+    if (infoModal.show) closeInfo();
 
         if (passwordData.nuovaPassword !== passwordData.confermaPassword) {
-            setError('Le nuove password non corrispondono.');
+            openInfo('Errore', 'Le nuove password non corrispondono.', 'danger');
             return;
         }
 
@@ -90,13 +92,13 @@ const MedicoProfiloPage: React.FC = () => {
             const headers = { Authorization: `Bearer ${user.token}` };
             const payload = { vecchiaPassword: passwordData.vecchiaPassword, nuovaPassword: passwordData.nuovaPassword };
             await axios.put(`${API_BASE_URL}/medici/profilo/password`, payload, { headers });
-            setMessage('Password aggiornata con successo!');
+            openInfo('Operazione riuscita', 'Password aggiornata con successo!', 'success');
             setPasswordData({ vecchiaPassword: '', nuovaPassword: '', confermaPassword: '' });
         } catch (err: unknown) {
             if (axios.isAxiosError(err) && err.response) {
-                setError(err.response.data || 'Errore nell\'aggiornamento della password. Controlla che la vecchia password sia corretta.');
+                openInfo('Errore', err.response.data || "Errore nell'aggiornamento della password. Controlla che la vecchia password sia corretta.", 'danger');
             } else {
-                setError('Errore nell\'aggiornamento della password. Controlla che la vecchia password sia corretta.');
+                openInfo('Errore', "Errore nell'aggiornamento della password. Controlla che la vecchia password sia corretta.", 'danger');
             }
         }
     };
@@ -104,9 +106,7 @@ const MedicoProfiloPage: React.FC = () => {
     if (!profile) return <div className="container mt-5 text-center"><h3>Caricamento...</h3></div>;
 
     return (
-        <div className="container my-5">
-            {message && <div className="alert alert-success">{message}</div>}
-            {error && <div className="alert alert-danger">{error}</div>}
+    <div className="container my-5">
 
             <div className="row g-5">
                 {/* --- Form Dati Profilo --- */}
@@ -171,6 +171,16 @@ const MedicoProfiloPage: React.FC = () => {
                     </div>
                 </div>
             </div>
+            {/* Modale informativo */}
+            <Modal show={infoModal.show} onHide={closeInfo} centered>
+                <Modal.Header closeButton>
+                    <Modal.Title>{infoModal.title || 'Informazione'}</Modal.Title>
+                </Modal.Header>
+                <Modal.Body>{infoModal.message}</Modal.Body>
+                <Modal.Footer>
+                    <Button variant={infoModal.variant || 'primary'} onClick={closeInfo}>OK</Button>
+                </Modal.Footer>
+            </Modal>
         </div>
     );
 };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, type FC } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/useAuth';
 import 'bootstrap/dist/css/bootstrap.min.css';
@@ -18,7 +18,7 @@ interface PazienteProfile {
   cap: string;
 }
 
-const PazienteProfiloPage: React.FC = () => {
+const PazienteProfiloPage: FC = () => {
     const { user } = useAuth();
     // Stato per i dati del profilo che verranno modificati
     const [formData, setFormData] = useState<Partial<PazienteProfile>>({});

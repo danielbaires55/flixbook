@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
 import './css/SpecialitaSection.css'; // Assicurati che il percorso al file CSS sia corretto
 
