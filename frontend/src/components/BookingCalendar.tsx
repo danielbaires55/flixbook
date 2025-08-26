@@ -9,7 +9,7 @@ import { useAuth } from "../context/useAuth";
 
 const API_BASE_URL = "http://localhost:8080/api";
 
-// --- Interfacce per i dati dei filtri ---
+// --- Interfacce ---
 interface Specialita {
   id: number;
   nome: string;
@@ -28,6 +28,14 @@ interface Medico {
   cognome: string;
 }
 
+interface SlotDisponibile {
+  data: string;
+  oraInizio: string;
+  medicoId: number;
+  medicoNome: string;
+  medicoCognome: string;
+}
+
 const BookingCalendar: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -41,23 +49,23 @@ const BookingCalendar: React.FC = () => {
   const [selectedPrestazioneId, setSelectedPrestazioneId] = useState<string>("");
   const [selectedMedicoId, setSelectedMedicoId] = useState<string>("");
 
-  // Stati per il calendario e gli slot
+  // Stati per il calendario e la nuova lista di slot
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [availableSlots, setAvailableSlots] = useState<string[]>([]);
+  const [prossimiSlot, setProssimiSlot] = useState<SlotDisponibile[]>([]);
+  const [slotDelGiorno, setSlotDelGiorno] = useState<string[]>([]);
 
   // Stati di UI
-  const [loading, setLoading] = useState<boolean>(false);
+  const [loadingSlots, setLoadingSlots] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Funzione helper per formattare una data in YYYY-MM-DD in modo sicuro, neutralizzando il fuso orario
   const toYYYYMMDD = (date: Date): string => {
     const offset = date.getTimezoneOffset();
-    const adjustedDate = new Date(date.getTime() - (offset * 60 * 1000));
-    return adjustedDate.toISOString().split('T')[0];
+    const adjustedDate = new Date(date.getTime() - offset * 60 * 1000);
+    return adjustedDate.toISOString().split("T")[0];
   };
 
-  // Caricamento dati per i filtri
+  // Caricamento iniziale delle specialità
   useEffect(() => {
     axios
       .get<Specialita[]>(`${API_BASE_URL}/specialita`)
@@ -65,80 +73,174 @@ const BookingCalendar: React.FC = () => {
       .catch((error) => console.error("Errore nel recupero delle specialità", error));
   }, []);
 
+  // Caricamento prestazioni quando cambia la specialità
   useEffect(() => {
     if (selectedSpecialitaId) {
+      setPrestazioniList([]);
+      setMediciList([]);
+      setProssimiSlot([]);
+      setSelectedPrestazioneId("");
+      setSelectedMedicoId("");
+
       axios
         .get<Prestazione[]>(`${API_BASE_URL}/prestazioni/bySpecialita/${selectedSpecialitaId}`)
         .then((response) => {
           setPrestazioniList(response.data);
-          setMediciList([]);
-          setAvailableSlots([]);
-          setSelectedPrestazioneId("");
-          setSelectedMedicoId("");
-        });
+        })
+        .catch((error) => console.error("Errore nel recupero delle prestazioni", error));
     }
   }, [selectedSpecialitaId]);
 
+  // Caricamento medici quando cambia la prestazione
   useEffect(() => {
     if (selectedPrestazioneId) {
+      setMediciList([]);
+      setProssimiSlot([]);
+      setSelectedMedicoId("");
+
       axios
         .get<Medico[]>(`${API_BASE_URL}/medici/byPrestazione/${selectedPrestazioneId}`)
         .then((response) => {
           setMediciList(response.data);
-          setAvailableSlots([]);
-          setSelectedMedicoId("");
-        });
+        })
+        .catch((error) => console.error("Errore nel recupero dei medici", error));
     }
   }, [selectedPrestazioneId]);
 
-  // Caricamento degli slot dinamici
-  useEffect(() => {
-    if (selectedPrestazioneId && selectedMedicoId && selectedDate) {
-      setLoading(true);
-      setAvailableSlots([]);
-      const dataFormattata = toYYYYMMDD(selectedDate);
-
-      axios
-        .get<string[]>(`${API_BASE_URL}/slots/available`, {
-          params: {
-            prestazioneId: selectedPrestazioneId,
-            medicoId: selectedMedicoId,
-            data: dataFormattata,
-          },
-        })
-        .then((response) => {
-          setAvailableSlots(response.data);
-        })
-        .catch((error) => console.error("Errore nel recupero degli slot", error))
-        .finally(() => setLoading(false));
+  // Funzione per ottenere i prossimi giorni con disponibilità
+  const getProssimiGiorni = (numGiorni: number = 10): string[] => {
+    const giorni: string[] = [];
+    const oggi = new Date();
+    
+    for (let i = 0; i < numGiorni; i++) {
+      const data = new Date(oggi);
+      data.setDate(oggi.getDate() + i);
+      giorni.push(toYYYYMMDD(data));
     }
-  }, [selectedPrestazioneId, selectedMedicoId, selectedDate]);
+    
+    return giorni;
+  };
 
-  // Gestione della prenotazione
-  const handleBooking = async (oraInizio: string) => {
+  // Funzione per caricare i primi 5 slot realmente disponibili
+  const caricaPrimiSlotDisponibili = async () => {
+    if (!selectedPrestazioneId) return;
+
+    setLoadingSlots(true);
     setError(null);
-    setSuccess(null);
+    setProssimiSlot([]);
 
+    try {
+      const prossimiGiorni = getProssimiGiorni(14); // Controlla i prossimi 14 giorni
+      const tuttiSlot: SlotDisponibile[] = [];
+
+      // Se c'è un medico selezionato, usa solo quello
+      const mediciDaControllare = selectedMedicoId 
+        ? [{ id: parseInt(selectedMedicoId), nome: '', cognome: '' }]
+        : mediciList;
+
+      for (const giorno of prossimiGiorni) {
+        if (tuttiSlot.length >= 5) break; // Fermiamo quando abbiamo già 5 slot
+
+        for (const medico of mediciDaControllare) {
+          if (tuttiSlot.length >= 5) break;
+
+          try {
+            const response = await axios.get<string[]>(`${API_BASE_URL}/slots/available`, {
+              params: {
+                prestazioneId: selectedPrestazioneId,
+                medicoId: medico.id.toString(),
+                data: giorno,
+              },
+            });
+
+            if (response.data.length > 0) {
+              // Trova i dati del medico
+              const medicoInfo = mediciList.find(m => m.id === medico.id);
+              
+              // Aggiungi tutti gli slot di questo medico per questo giorno
+              for (const ora of response.data) {
+                if (tuttiSlot.length >= 5) break;
+                
+                tuttiSlot.push({
+                  data: giorno,
+                  oraInizio: ora,
+                  medicoId: medico.id,
+                  medicoNome: medicoInfo?.nome || '',
+                  medicoCognome: medicoInfo?.cognome || ''
+                });
+              }
+            }
+          } catch  {
+            // Ignora errori per singoli giorni/medici
+            console.log(`Nessun slot disponibile per ${giorno} con medico ${medico.id}`);
+          }
+        }
+      }
+
+      // Ordina tutti gli slot trovati cronologicamente
+      const slotsOrdinati = tuttiSlot.sort((a, b) => {
+        const dataA = new Date(`${a.data}T${a.oraInizio}`);
+        const dataB = new Date(`${b.data}T${b.oraInizio}`);
+        return dataA.getTime() - dataB.getTime();
+      });
+
+      setProssimiSlot(slotsOrdinati.slice(0, 5));
+    } catch  {
+      setError("Errore nel caricamento delle disponibilità.");
+    } finally {
+      setLoadingSlots(false);
+    }
+  };
+
+  // Caricamento slot disponibili quando cambia prestazione o medico
+  useEffect(() => {
+    if (selectedPrestazioneId && mediciList.length > 0) {
+      caricaPrimiSlotDisponibili();
+    }
+  }, [selectedPrestazioneId, selectedMedicoId, mediciList]);
+
+  const handleDateClick = (date: Date) => {
+    setSelectedDate(date);
+
+    if (!selectedPrestazioneId || !selectedMedicoId) {
+      alert("Per favore, seleziona prima una prestazione e un medico per vedere gli orari.");
+      return;
+    }
+
+    setLoadingSlots(true);
+    setSlotDelGiorno([]);
+    const dataFormattata = toYYYYMMDD(date);
+
+    axios
+      .get<string[]>(`${API_BASE_URL}/slots/available`, {
+        params: {
+          prestazioneId: selectedPrestazioneId,
+          medicoId: selectedMedicoId,
+          data: dataFormattata,
+        },
+      })
+      .then((res) => setSlotDelGiorno(res.data))
+      .catch(() => setError("Errore nel caricare gli orari per questa data."))
+      .finally(() => setLoadingSlots(false));
+  };
+
+  const handleBooking = async (
+    slot: SlotDisponibile | { data: string; oraInizio: string; medicoId: number }
+  ) => {
     if (!user) {
-      setError("Devi essere loggato per prenotare.");
       navigate("/login");
       return;
     }
 
     const prestazione = prestazioniList.find((p) => p.id === parseInt(selectedPrestazioneId));
-    if (!prestazione) {
-      setError("Errore: prestazione non valida.");
-      return;
-    }
-
-    const dataFormattata = toYYYYMMDD(selectedDate);
+    if (!prestazione) return;
 
     const params = new URLSearchParams({
       pazienteId: user.userId.toString(),
-      medicoId: selectedMedicoId,
+      medicoId: slot.medicoId.toString(),
       prestazioneId: selectedPrestazioneId,
-      data: dataFormattata,
-      oraInizio: oraInizio,
+      data: slot.data,
+      oraInizio: slot.oraInizio,
       tipoAppuntamento: prestazione.tipoPrestazione,
     }).toString();
 
@@ -146,11 +248,11 @@ const BookingCalendar: React.FC = () => {
       await axios.post(`${API_BASE_URL}/appuntamenti/create?${params}`, null, {
         headers: { Authorization: `Bearer ${user.token}` },
       });
-      setSuccess("Appuntamento prenotato con successo! Sarai reindirizzato alla tua dashboard.");
+      
+      setSuccess("Appuntamento prenotato con successo!");
       setTimeout(() => navigate("/paziente-dashboard"), 2000);
-    } catch (err) {
-      setError("Errore durante la prenotazione. Lo slot potrebbe non essere più disponibile.");
-      console.error("Errore di prenotazione:", err);
+    } catch  {
+      setError("Errore durante la prenotazione.");
     }
   };
 
@@ -160,29 +262,34 @@ const BookingCalendar: React.FC = () => {
         <div className="col-lg-10">
           <div className="card shadow-sm">
             <div className="card-body p-4">
-              <h1 className="card-title text-center mb-4">Prenota il tuo appuntamento</h1>
+              <h1 className="card-title text-center mb-4">
+                Prenota il tuo appuntamento
+              </h1>
+              
               {error && <div className="alert alert-danger">{error}</div>}
               {success && <div className="alert alert-success">{success}</div>}
 
+              {/* Filtri di selezione */}
               <div className="row g-3 mb-4">
                 <div className="col-md-4">
-                  <label htmlFor="specialita-select" className="form-label">1. Seleziona Specialità</label>
+                  <label className="form-label">Specialità</label>
                   <select
-                    id="specialita-select"
                     className="form-select"
                     onChange={(e) => setSelectedSpecialitaId(e.target.value)}
                     value={selectedSpecialitaId}
                   >
                     <option value="">Scegli...</option>
                     {specialitaList.map((s) => (
-                      <option key={s.id} value={s.id}>{s.nome}</option>
+                      <option key={s.id} value={s.id}>
+                        {s.nome}
+                      </option>
                     ))}
                   </select>
                 </div>
+                
                 <div className="col-md-4">
-                  <label htmlFor="prestazione-select" className="form-label">2. Seleziona Prestazione</label>
+                  <label className="form-label">Prestazione</label>
                   <select
-                    id="prestazione-select"
                     className="form-select"
                     onChange={(e) => setSelectedPrestazioneId(e.target.value)}
                     value={selectedPrestazioneId}
@@ -190,60 +297,142 @@ const BookingCalendar: React.FC = () => {
                   >
                     <option value="">Scegli...</option>
                     {prestazioniList.map((p) => (
-                      <option key={p.id} value={p.id}>{p.nome} - {p.costo}€</option>
+                      <option key={p.id} value={p.id}>
+                        {p.nome} - {p.costo}€
+                      </option>
                     ))}
                   </select>
                 </div>
+                
                 <div className="col-md-4">
-                  <label htmlFor="medico-select" className="form-label">3. Seleziona Medico</label>
+                  <label className="form-label">
+                    Medico (Opzionale)
+                    <small className="text-muted d-block">Lascia vuoto per vedere tutti i medici</small>
+                  </label>
                   <select
-                    id="medico-select"
                     className="form-select"
                     onChange={(e) => setSelectedMedicoId(e.target.value)}
                     value={selectedMedicoId}
                     disabled={!selectedPrestazioneId}
                   >
-                    <option value="">Scegli...</option>
+                    <option value="">Tutti i medici disponibili</option>
                     {mediciList.map((m) => (
-                      <option key={m.id} value={m.id}>{m.nome} {m.cognome}</option>
+                      <option key={m.id} value={m.id}>
+                        Dr. {m.nome} {m.cognome}
+                      </option>
                     ))}
                   </select>
                 </div>
               </div>
 
-              {selectedPrestazioneId && selectedMedicoId && (
-                <div className="row mt-4">
+              {/* Sezione slot disponibili */}
+              {selectedPrestazioneId && (
+                <div className="card mt-4">
+                  <div className="card-header">
+                    <div className="d-flex justify-content-between align-items-center">
+                      <span>Primi 5 slot disponibili</span>
+                      {selectedMedicoId && (
+                        <small className="text-muted">
+                          Filtrato per: Dr. {mediciList.find(m => m.id === parseInt(selectedMedicoId))?.nome} {mediciList.find(m => m.id === parseInt(selectedMedicoId))?.cognome}
+                        </small>
+                      )}
+                    </div>
+                  </div>
+                  <ul className="list-group list-group-flush">
+                    {loadingSlots && (
+                      <li className="list-group-item text-center">
+                        <div className="spinner-border spinner-border-sm me-2" role="status"></div>
+                        Caricamento slot disponibili...
+                      </li>
+                    )}
+                    
+                    {!loadingSlots && prossimiSlot.length === 0 && (
+                      <li className="list-group-item text-center text-muted">
+                        Nessuna disponibilità trovata per questa prestazione.
+                        {selectedMedicoId && " Prova a rimuovere il filtro medico."}
+                      </li>
+                    )}
+                    
+                    {prossimiSlot.map((slot, index) => {
+                      const dataSlot = new Date(`${slot.data}T${slot.oraInizio}`);
+                      const isOggi = slot.data === toYYYYMMDD(new Date());
+                      
+                      return (
+                        <li
+                          key={`${slot.data}-${slot.oraInizio}-${slot.medicoId}`}
+                          className="list-group-item d-flex justify-content-between align-items-center"
+                        >
+                          <div>
+                            <strong>Dr. {slot.medicoNome} {slot.medicoCognome}</strong>
+                            <br />
+                            <small className="text-muted">
+                              {isOggi ? "Oggi" : dataSlot.toLocaleDateString("it-IT", {
+                                weekday: "long",
+                                day: "numeric",
+                                month: "long",
+                              })} alle <strong>{slot.oraInizio}</strong>
+                            </small>
+                            {index === 0 && (
+                              <span className="badge bg-success ms-2">Più vicino</span>
+                            )}
+                          </div>
+                          <button
+                            className="btn btn-primary btn-sm"
+                            onClick={() => handleBooking(slot)}
+                          >
+                            Prenota
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+
+              {/* Sezione calendario */}
+              <div className="card mt-4">
+                <div className="card-header">
+                  Oppure, cerca per giorno specifico
+                </div>
+                <div className="row p-3">
                   <div className="col-md-6 d-flex justify-content-center">
                     <Calendar
-                      onChange={(date) => setSelectedDate(date as Date)}
+                      onChange={(date) => handleDateClick(date as Date)}
                       value={selectedDate}
                       minDate={new Date()}
                     />
                   </div>
+                  
                   <div className="col-md-6">
-                    <h4 className="text-center">Orari disponibili per il {selectedDate.toLocaleDateString("it-IT")}</h4>
-                    {loading ? (
-                      <p className="text-center">Ricerca orari...</p>
-                    ) : (
-                      <div className="d-flex flex-wrap gap-2 justify-content-center mt-3">
-                        {availableSlots.length > 0 ? (
-                          availableSlots.map((slot) => (
-                            <button
-                              key={slot}
-                              className="btn btn-outline-primary"
-                              onClick={() => handleBooking(slot)}
-                            >
-                              {slot}
-                            </button>
-                          ))
-                        ) : (
-                          <p>Nessun orario disponibile per questa data.</p>
-                        )}
-                      </div>
-                    )}
+                    <h5 className="text-center">
+                      Orari per il {selectedDate.toLocaleDateString("it-IT")}
+                    </h5>
+                    <div className="d-flex flex-wrap gap-2 justify-content-center mt-3">
+                      {loadingSlots && <p>...</p>}
+                      
+                      {slotDelGiorno.length > 0 ? (
+                        slotDelGiorno.map((ora) => (
+                          <button
+                            key={ora}
+                            className="btn btn-outline-primary"
+                            onClick={() =>
+                              handleBooking({
+                                data: toYYYYMMDD(selectedDate),
+                                oraInizio: ora,
+                                medicoId: Number(selectedMedicoId),
+                              })
+                            }
+                          >
+                            {ora}
+                          </button>
+                        ))
+                      ) : (
+                        <p>Seleziona un medico per vedere gli orari.</p>
+                      )}
+                    </div>
                   </div>
                 </div>
-              )}
+              </div>
             </div>
           </div>
         </div>

@@ -73,7 +73,8 @@ public class SecurityConfig {
                                 "/prof_img/**",
                                 "/api/medici",
                                 "/icons/**",
-                                "/api/slots/available"
+                                "/api/slots/available",
+                                "/api/slots/prossimi-disponibili"
                         ).permitAll()
                         .requestMatchers(
                                 "/api/medici/**",
