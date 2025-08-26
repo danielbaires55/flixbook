@@ -2,17 +2,20 @@ import "./App.css";
 import "bootstrap/dist/css/bootstrap.min.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
-// Importa i tuoi componenti
+// Componenti
 import BookingCalendar from "./components/BookingCalendar";
 import Login from "./components/Login";
 import MedicoDashboard from "./components/MedicoDashboard";
 import PazienteDashboard from "./components/PazienteDashboard";
-import CreateDisponibilitaForm from "./components/CreateDisponibilitaForm";
 import FeedbackForm from "./components/FeedbackForm";
 import HomePage from "./pages/HomePage";
 import { useAuth } from "./context/useAuth";
 import { useLocation } from "react-router-dom";
 import PazienteRegistrationForm from "./components/RegisterForm";
+import CreateBloccoOrarioForm from "./components/CreateBloccoOrarioForm";
+import DashboardLayout from "./components/DashboardLayout";
+import MedicoProfiloPage from "./pages/MedicoProfiloPage";
+import PazienteProfiloPage from "./pages/PazienteProfilePage";
 
 type ProtectedRouteProps = {
   children: React.ReactNode;
@@ -47,49 +50,42 @@ function App() {
 
         {/* Dashboard per Medico E Collaboratore */}
         <Route
-          path="/medico-dashboard"
           element={
             <ProtectedRoute
               allowedRoles={["ROLE_MEDICO", "ROLE_COLLABORATORE"]}
             >
-              <MedicoDashboard />
+              <DashboardLayout />
             </ProtectedRoute>
           }
-        />
+        >
+          {/* Queste rotte sono ora "figlie" del layout.
+        Verranno visualizzate DENTRO il DashboardLayout,
+        dove si trova il tag <Outlet />.
+      */}
+          <Route path="/medico-dashboard" element={<MedicoDashboard />} />
+          <Route
+            path="/medico/create-blocco-orario"
+            element={<CreateBloccoOrarioForm />}
+          />
+          <Route path="/medico/profilo" element={<MedicoProfiloPage />} />
+        </Route>
 
-        {/* Creazione disponibilità per Medico E Collaboratore */}
         <Route
-          path="/medico/create-disponibilita"
-          element={
-            <ProtectedRoute
-              allowedRoles={["ROLE_MEDICO", "ROLE_COLLABORATORE"]}
-            >
-              <CreateDisponibilitaForm />
-            </ProtectedRoute>
-          }
-        />
-
-        {/* Dashboard per il Paziente */}
-        <Route
-          path="/paziente-dashboard"
           element={
             <ProtectedRoute allowedRoles={["ROLE_PAZIENTE"]}>
-              <PazienteDashboard />
+              <DashboardLayout />
             </ProtectedRoute>
           }
-        />
+        >
+          {/* Queste sono ora le pagine "figlie" del layout del paziente */}
+          <Route path="/paziente-dashboard" element={<PazienteDashboard />} />
+          <Route path="/feedback/:appuntamentoId" element={<FeedbackForm />} />
 
+          {/* AGGIUNGI LA NUOVA ROTTA QUI */}
+          <Route path="/paziente/profilo" element={<PazienteProfiloPage />} />
+        </Route>
         {/* Rotta catch-all per reindirizzare URL non validi */}
         <Route path="*" element={<Navigate to="/" />} />
-
-        <Route
-          path="/feedback/:appuntamentoId"
-          element={
-            <ProtectedRoute allowedRoles={["ROLE_PAZIENTE"]}>
-              <FeedbackForm />
-            </ProtectedRoute>
-          }
-        />
       </Routes>
     </BrowserRouter>
   );

@@ -72,12 +72,14 @@ public class SecurityConfig {
                                 "/api/disponibilita/available",
                                 "/prof_img/**",
                                 "/api/medici",
-                                "/icons/**"
+                                "/icons/**",
+                                "/api/slots/available"
                         ).permitAll()
                         .requestMatchers(
                                 "/api/medici/**",
                                 "/api/appuntamenti/medico/**",
-                                "/api/disponibilita/medico/**"
+                                "/api/disponibilita/medico/**",
+                                "/api/blocchi-orario/**"
                         ).hasAnyAuthority("ROLE_MEDICO", "ROLE_COLLABORATORE")
                         .requestMatchers(
                                 "/api/pazienti/**",

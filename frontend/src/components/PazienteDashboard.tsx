@@ -1,25 +1,31 @@
-// src/components/PazienteDashboard.tsx
-
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import { Link, useNavigate } from "react-router-dom"; // Aggiungi useNavigate
+import { Link, useNavigate } from "react-router-dom";
 import "bootstrap/dist/css/bootstrap.min.css";
 import { useAuth } from "../context/useAuth";
 
-// --- Interfacce (invariate) ---
+// --- Interfacce Aggiornate ---
 interface Medico { id: number; nome: string; cognome: string; imgProfUrl: string; }
 interface Prestazione { id: number; nome: string; costo: number; }
-interface Disponibilita { id: number; data: string; oraInizio: string; oraFine: string; medico: Medico; prestazione: Prestazione; }
-interface Appuntamento { id: number; dataEOraInizio: string; dataEOraFine: string; stato: "CONFERMATO" | "COMPLETATO" | "ANNULLATO"; tipoAppuntamento: "virtuale" | "fisico"; disponibilita: Disponibilita | null; linkVideocall?: string; }
+// L'appuntamento ora ha Medico e Prestazione come campi diretti
+interface Appuntamento { 
+  id: number; 
+  dataEOraInizio: string; 
+  dataEOraFine: string; 
+  stato: "CONFERMATO" | "COMPLETATO" | "ANNULLATO"; 
+  tipoAppuntamento: "virtuale" | "fisico"; 
+  medico: Medico;
+  prestazione: Prestazione;
+  linkVideocall?: string; 
+}
 interface PazienteProfile { nome: string; cognome: string; email: string; }
-
 
 const API_BASE_URL = "http://localhost:8080/api";
 const SERVER_BASE_URL = 'http://localhost:8080';
 
 const PazienteDashboard = () => {
-  const { user, logout } = useAuth(); // 1. Ottieni anche la funzione di logout
-  const navigate = useNavigate(); // Hook per la navigazione
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   
   const [profile, setProfile] = useState<PazienteProfile | null>(null);
   const [appuntamenti, setAppuntamenti] = useState<Appuntamento[]>([]);
@@ -68,7 +74,7 @@ const PazienteDashboard = () => {
       alert("Appuntamento annullato con successo!");
       setAppuntamenti((prev) =>
         prev.map((app) =>
-          app.id === appuntamentoId ? { ...app, stato: "ANNULLATO", disponibilita: null } : app
+          app.id === appuntamentoId ? { ...app, stato: "ANNULLATO" } : app
         )
       );
     } catch (err) {
@@ -77,10 +83,9 @@ const PazienteDashboard = () => {
     }
   };
 
-  // 2. Aggiungi la funzione per gestire il logout
   const handleLogout = () => {
     logout();
-    navigate('/'); // Reindirizza alla home page
+    navigate('/');
   };
 
   if (loading) return <div className="text-center mt-5"><h3>Caricamento...</h3></div>;
@@ -105,7 +110,6 @@ const PazienteDashboard = () => {
                 <Link to="/book" className="btn btn-primary w-100">
                   Prenota un Nuovo Appuntamento
                 </Link>
-                {/* 3. Aggiungi il pulsante di logout nel JSX */}
                 <button className="btn btn-outline-secondary w-100 mt-2" onClick={handleLogout}>
                     Logout
                 </button>
@@ -124,21 +128,23 @@ const PazienteDashboard = () => {
                     <li key={app.id} className="list-group-item">
                       <div>
                         <strong>{new Date(app.dataEOraInizio).toLocaleDateString("it-IT", { year: 'numeric', month: 'long', day: 'numeric' })}</strong> alle <strong>{new Date(app.dataEOraInizio).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong>
-                        {app.disponibilita ? (
+                        
+                        {/* --- CORREZIONE: Legge i dati direttamente da app.medico e app.prestazione --- */}
+                        {app.medico && app.prestazione ? (
                           <>
                             <br />
                             <div className="d-flex align-items-center mt-2">
-                              {app.disponibilita.medico.imgProfUrl && (
+                              {app.medico.imgProfUrl && (
                                 <img 
-                                  src={`${SERVER_BASE_URL}${app.disponibilita.medico.imgProfUrl}`} 
-                                  alt={`Profilo del Dr. ${app.disponibilita.medico.cognome}`} 
+                                  src={`${SERVER_BASE_URL}${app.medico.imgProfUrl}`} 
+                                  alt={`Profilo del Dr. ${app.medico.cognome}`} 
                                   className="rounded-circle me-2" 
                                   style={{ width: '30px', height: '30px', objectFit: 'cover' }}
                                 />
                               )}
-                              <small className="text-muted">Dr. {app.disponibilita.medico.nome} {app.disponibilita.medico.cognome}</small>
+                              <small className="text-muted">Dr. {app.medico.nome} {app.medico.cognome}</small>
                             </div>
-                            <small className="text-muted d-block mt-1">Prestazione: {app.disponibilita.prestazione.nome} ({app.disponibilita.prestazione.costo}€)</small>
+                            <small className="text-muted d-block mt-1">Prestazione: {app.prestazione.nome} ({app.prestazione.costo}€)</small>
                           </>
                         ) : (
                           <><br /><small className="text-muted">Dettagli non più disponibili.</small></>

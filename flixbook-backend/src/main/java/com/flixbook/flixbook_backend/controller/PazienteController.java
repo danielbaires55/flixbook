@@ -1,5 +1,6 @@
 package com.flixbook.flixbook_backend.controller;
 
+import com.flixbook.flixbook_backend.config.CustomUserDetails;
 import com.flixbook.flixbook_backend.model.Paziente;
 import com.flixbook.flixbook_backend.service.PazienteService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -8,6 +9,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
 import java.util.Optional;
 
 @RestController
@@ -17,31 +20,34 @@ public class PazienteController {
     @Autowired
     private PazienteService pazienteService;
 
+    @Autowired
+    private org.springframework.security.core.userdetails.UserDetailsService userDetailsService;
+
     @PostMapping("/register")
     public ResponseEntity<?> registerPaziente(@RequestBody Paziente paziente) {
         try {
             Paziente newPaziente = pazienteService.registerPaziente(paziente);
             // Non restituire la password hashata
-            newPaziente.setPasswordHash(null); 
+            newPaziente.setPasswordHash(null);
             return new ResponseEntity<>(newPaziente, HttpStatus.CREATED);
         } catch (IllegalArgumentException e) {
             // Cattura l'eccezione se l'email esiste già
             return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
         }
     }
-    
+
     // Nuovo endpoint per il profilo del paziente
     @GetMapping("/profile")
     public ResponseEntity<Paziente> getPazienteProfile() {
         // Ottiene l'oggetto di autenticazione dall'attuale contesto di sicurezza
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        
+
         // L'email dell'utente è il "principal" nell'oggetto di autenticazione
         String email = authentication.getName();
-        
+
         // Usa il servizio per trovare il paziente tramite l'email
         Optional<Paziente> pazienteOptional = pazienteService.findPazienteByEmail(email);
-        
+
         if (pazienteOptional.isPresent()) {
             // Se il paziente viene trovato, restituisci i suoi dati
             Paziente paziente = pazienteOptional.get();
@@ -51,6 +57,32 @@ public class PazienteController {
         } else {
             // Se non viene trovato, restituisci un errore 404
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+    }
+
+    @PutMapping("/profilo")
+    public ResponseEntity<Paziente> updateProfilo(@RequestBody Map<String, Object> datiProfilo,
+            Authentication authentication) {
+        CustomUserDetails userDetails = (CustomUserDetails) userDetailsService
+                .loadUserByUsername(authentication.getName());
+        Long pazienteId = userDetails.getUserId();
+
+        Paziente pazienteAggiornato = pazienteService.updateProfilo(pazienteId, datiProfilo);
+        return ResponseEntity.ok(pazienteAggiornato);
+    }
+
+    @PutMapping("/profilo/password")
+    public ResponseEntity<?> changePassword(@RequestBody Map<String, String> passwordData,
+            Authentication authentication) {
+        try {
+            CustomUserDetails userDetails = (CustomUserDetails) userDetailsService
+                    .loadUserByUsername(authentication.getName());
+            Long pazienteId = userDetails.getUserId();
+
+            pazienteService.changePassword(pazienteId, passwordData);
+            return ResponseEntity.ok("Password aggiornata con successo.");
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
 }

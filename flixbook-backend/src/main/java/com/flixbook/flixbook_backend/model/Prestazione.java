@@ -20,6 +20,8 @@ public class Prestazione {
     private String descrizione;
     private Double costo;
     private String icon_url;
+    @Column(name = "durata_minuti", nullable = false)
+    private int durataMinuti;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "tipo_prestazione", nullable = false)

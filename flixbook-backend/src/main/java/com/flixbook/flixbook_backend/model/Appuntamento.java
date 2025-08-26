@@ -15,17 +15,6 @@ public class Appuntamento {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // --- CORREZIONE: Aggiunta l'annotazione @Column ---
-    @Column(name = "reminder_inviato", nullable = false)
-    private boolean reminderInviato = false;
-
-    @Column(name = "sms_reminder_inviato", nullable = false)
-    private boolean smsReminderInviato = false;
-
-    @Column(name = "feedback_inviato", nullable = false)
-    private boolean feedbackInviato = false;
-    // ---------------------------------------------------
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     @JoinColumn(name = "paziente_id", nullable = false)
@@ -33,8 +22,13 @@ public class Appuntamento {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
-    @JoinColumn(name = "disponibilita_id")
-    private Disponibilita disponibilita;
+    @JoinColumn(name = "medico_id", nullable = false)
+    private Medico medico;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    @JoinColumn(name = "prestazione_id", nullable = false)
+    private Prestazione prestazione;
 
     @Column(name = "data_e_ora_inizio", nullable = false)
     private LocalDateTime dataEOraInizio;
@@ -55,4 +49,13 @@ public class Appuntamento {
 
     @Column(name = "data_prenotazione", nullable = false)
     private LocalDateTime dataPrenotazione;
+    
+    @Column(name = "reminder_inviato", nullable = false)
+    private boolean reminderInviato = false;
+
+    @Column(name = "sms_reminder_inviato", nullable = false)
+    private boolean smsReminderInviato = false;
+
+    @Column(name = "feedback_inviato", nullable = false)
+    private boolean feedbackInviato = false;
 }

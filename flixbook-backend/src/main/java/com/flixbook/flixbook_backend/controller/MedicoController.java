@@ -10,9 +10,16 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @RestController
@@ -21,6 +28,9 @@ public class MedicoController {
 
     @Autowired
     private MedicoService medicoService;
+
+    @Autowired
+    private org.springframework.security.core.userdetails.UserDetailsService userDetailsService;
 
     // =======================================================================
     // == METODO /profile AGGIORNATO E CORRETTO                           ==
@@ -63,9 +73,34 @@ public class MedicoController {
         return medicoService.findAll();
     }
     
-    // Assicurati che il tuo MedicoService abbia un metodo findMedicoById
-    // Se non ce l'ha, aggiungilo:
-    // public Optional<Medico> findMedicoById(Long id) {
-    //     return medicoRepository.findById(id);
-    // }
+   @PutMapping("/profilo")
+    public ResponseEntity<Medico> updateProfilo(@RequestBody Map<String, String> datiProfilo, Authentication authentication) {
+        CustomUserDetails userDetails = (CustomUserDetails) userDetailsService.loadUserByUsername(authentication.getName());
+        Long medicoId = userDetails.getMedicoId();
+        
+        Medico medicoAggiornato = medicoService.updateProfilo(medicoId, datiProfilo);
+        return ResponseEntity.ok(medicoAggiornato);
+    }
+
+    @PutMapping("/profilo/password")
+    public ResponseEntity<?> changePassword(@RequestBody Map<String, String> passwordData, Authentication authentication) {
+        try {
+            CustomUserDetails userDetails = (CustomUserDetails) userDetailsService.loadUserByUsername(authentication.getName());
+            Long medicoId = userDetails.getMedicoId();
+            
+            medicoService.changePassword(medicoId, passwordData);
+            return ResponseEntity.ok("Password aggiornata con successo.");
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
+    @PostMapping("/profilo/immagine")
+    public ResponseEntity<Medico> updateImmagineProfilo(@RequestParam("file") MultipartFile file, Authentication authentication) {
+        CustomUserDetails userDetails = (CustomUserDetails) userDetailsService.loadUserByUsername(authentication.getName());
+        Long medicoId = userDetails.getMedicoId();
+
+        Medico medicoAggiornato = medicoService.updateImmagineProfilo(medicoId, file);
+        return ResponseEntity.ok(medicoAggiornato);
+    }
 }
