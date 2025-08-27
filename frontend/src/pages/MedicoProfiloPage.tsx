@@ -2,7 +2,8 @@ import { useState, useEffect, type FC } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/useAuth';
 import 'bootstrap/dist/css/bootstrap.min.css';
-import { Modal, Button } from 'react-bootstrap';
+import { Modal, Button, Collapse } from 'react-bootstrap';
+import './MedicoProfiloPage.css';
 
 const API_BASE_URL = 'http://localhost:8080/api';
 const SERVER_BASE_URL = 'http://localhost:8080';
@@ -22,6 +23,10 @@ const MedicoProfiloPage: FC = () => {
     const [formData, setFormData] = useState({ nome: '', cognome: '', telefono: '', biografia: '' });
     const [passwordData, setPasswordData] = useState({ vecchiaPassword: '', nuovaPassword: '', confermaPassword: '' });
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [savingProfile, setSavingProfile] = useState(false);
+    // UI stato per sezione password
+    const [showPwdSection, setShowPwdSection] = useState(false);
+    const [showPasswords, setShowPasswords] = useState(false);
     // Modale informativo (successo/errore)
     const [infoModal, setInfoModal] = useState<{ show: boolean; title: string; message: string; variant?: 'primary' | 'success' | 'danger'; onClose?: () => void }>({ show: false, title: '', message: '' });
     const openInfo = (title: string, message: string, variant: 'primary' | 'success' | 'danger' = 'primary', onClose?: () => void) => setInfoModal({ show: true, title, message, variant, onClose });
@@ -55,7 +60,7 @@ const MedicoProfiloPage: FC = () => {
         if (!user) return;
     // azzera eventuali modali pendenti
     if (infoModal.show) closeInfo();
-        
+        setSavingProfile(true);
         try {
             const headers = { Authorization: `Bearer ${user.token}` };
 
@@ -76,6 +81,9 @@ const MedicoProfiloPage: FC = () => {
         } catch {
             openInfo('Errore', "Errore nell'aggiornamento del profilo.", 'danger');
         }
+        finally {
+            setSavingProfile(false);
+        }
     };
 
     const handlePasswordSubmit = async (e: React.FormEvent) => {
@@ -94,6 +102,8 @@ const MedicoProfiloPage: FC = () => {
             await axios.put(`${API_BASE_URL}/medici/profilo/password`, payload, { headers });
             openInfo('Operazione riuscita', 'Password aggiornata con successo!', 'success');
             setPasswordData({ vecchiaPassword: '', nuovaPassword: '', confermaPassword: '' });
+            setShowPasswords(false);
+            setShowPwdSection(false);
         } catch (err: unknown) {
             if (axios.isAxiosError(err) && err.response) {
                 openInfo('Errore', err.response.data || "Errore nell'aggiornamento della password. Controlla che la vecchia password sia corretta.", 'danger');
@@ -138,8 +148,36 @@ const MedicoProfiloPage: FC = () => {
                                         <div className="mb-3"><label className="form-label">Telefono</label><input type="tel" className="form-control" value={formData.telefono} onChange={e => setFormData({...formData, telefono: e.target.value})} /></div>
                                     </div>
                                 </div>
-                                <div className="mb-3 mt-3"><label className="form-label">Biografia</label><textarea className="form-control" rows={4} value={formData.biografia} onChange={e => setFormData({...formData, biografia: e.target.value})} /></div>
-                                <button type="submit" className="btn btn-primary w-100">Salva Dati Profilo</button>
+                                <div className="mb-3 mt-3">
+                                    <label className="form-label">Biografia</label>
+                                    <textarea
+                                        className="form-control bio-textarea"
+                                        rows={4}
+                                        value={formData.biografia}
+                                        onChange={e => setFormData({ ...formData, biografia: e.target.value })}
+                                        aria-label="Biografia del medico"
+                                    />
+                                </div>
+                                <div className="d-flex justify-content-center">
+                                    <button type="submit" className="btn btn-primary px-4 d-inline-flex align-items-center" aria-label="Salva dati profilo" disabled={savingProfile}>
+                                        {savingProfile ? (
+                                            <>
+                                                <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                                Salvataggio...
+                                            </>
+                                        ) : (
+                                            <>
+                                                {/* save icon */}
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" aria-hidden className="me-2">
+                                                    <path d="M2 1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4.5L11.5 1zM2 2h8v3H2zM2 6h12v8H2z"/>
+                                                    <path d="M10 2.5v2H3v-2z"/>
+                                                    <path d="M4 10a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v3H4z"/>
+                                                </svg>
+                                                Salva Dati Profilo
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
                             </form>
                         </div>
                     </div>
@@ -149,24 +187,70 @@ const MedicoProfiloPage: FC = () => {
                 <div className="col-lg-5">
                     <div className="card shadow-sm h-100">
                         <div className="card-body p-4 d-flex flex-column">
-                            <h3 className="card-title text-center">Cambia Password</h3>
-                            <form onSubmit={handlePasswordSubmit} className="d-flex flex-column flex-grow-1">
-                                <div className="mb-3">
-                                    <label className="form-label">Vecchia Password</label>
-                                    <input type="password" required className="form-control" value={passwordData.vecchiaPassword} onChange={e => setPasswordData({...passwordData, vecchiaPassword: e.target.value})} />
+                            <div className="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h5 className="card-title mb-0">Sicurezza</h5>
+                                    <small className="text-muted">Modifica la password del tuo account</small>
                                 </div>
-                                <div className="mb-3">
-                                    <label className="form-label">Nuova Password</label>
-                                    <input type="password" required className="form-control" value={passwordData.nuovaPassword} onChange={e => setPasswordData({...passwordData, nuovaPassword: e.target.value})} />
+                                <button
+                                    type="button"
+                                    className="btn btn-sm btn-outline-secondary"
+                                    aria-controls="pwd-collapse"
+                                    aria-expanded={showPwdSection}
+                                    onClick={() => setShowPwdSection(v => !v)}
+                                >
+                                    {/* lock icon */}
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16" aria-hidden className="me-1">
+                                        <path d="M8 1a2 2 0 0 0-2 2v3H5a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2H10V3a2 2 0 0 0-2-2m1 5V3a1 1 0 1 0-2 0v3z"/>
+                                    </svg>
+                                    Cambia password
+                                </button>
+                            </div>
+
+                            <Collapse in={showPwdSection}>
+                                <div id="pwd-collapse">
+                                    <form onSubmit={handlePasswordSubmit} className="mt-3">
+                                        <div className="mb-2">
+                                            <label className="form-label small">Vecchia Password</label>
+                                            <input
+                                                type={showPasswords ? 'text' : 'password'}
+                                                required className="form-control form-control-sm"
+                                                autoComplete="current-password"
+                                                value={passwordData.vecchiaPassword}
+                                                onChange={e => setPasswordData({ ...passwordData, vecchiaPassword: e.target.value })}
+                                            />
+                                        </div>
+                                        <div className="mb-2">
+                                            <label className="form-label small">Nuova Password</label>
+                                            <input
+                                                type={showPasswords ? 'text' : 'password'}
+                                                required className="form-control form-control-sm"
+                                                autoComplete="new-password"
+                                                value={passwordData.nuovaPassword}
+                                                onChange={e => setPasswordData({ ...passwordData, nuovaPassword: e.target.value })}
+                                            />
+                                        </div>
+                                        <div className="mb-2">
+                                            <label className="form-label small">Conferma Nuova Password</label>
+                                            <input
+                                                type={showPasswords ? 'text' : 'password'}
+                                                required className="form-control form-control-sm"
+                                                autoComplete="new-password"
+                                                value={passwordData.confermaPassword}
+                                                onChange={e => setPasswordData({ ...passwordData, confermaPassword: e.target.value })}
+                                            />
+                                        </div>
+                                        <div className="d-flex justify-content-between align-items-center mb-2">
+                                            <div className="form-check">
+                                                <input id="toggleShowPwd" className="form-check-input" type="checkbox" checked={showPasswords} onChange={(e) => setShowPasswords(e.target.checked)} />
+                                                <label className="form-check-label small" htmlFor="toggleShowPwd">Mostra password</label>
+                                            </div>
+                                            <small className="text-muted">Suggerimento: usa almeno 8 caratteri, lettere e numeri.</small>
+                                        </div>
+                                        <button type="submit" className="btn btn-secondary btn-sm w-100">Aggiorna Password</button>
+                                    </form>
                                 </div>
-                                <div className="mb-3">
-                                    <label className="form-label">Conferma Nuova Password</label>
-                                    <input type="password" required className="form-control" value={passwordData.confermaPassword} onChange={e => setPasswordData({...passwordData, confermaPassword: e.target.value})} />
-                                </div>
-                                <div className="mt-auto">
-                                    <button type="submit" className="btn btn-secondary w-100">Cambia Password</button>
-                                </div>
-                            </form>
+                            </Collapse>
                         </div>
                     </div>
                 </div>

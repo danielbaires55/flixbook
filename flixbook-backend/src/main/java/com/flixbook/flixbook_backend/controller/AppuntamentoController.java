@@ -103,4 +103,26 @@ public class AppuntamentoController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         }
     }
+
+    /**
+     * Eliminazione storica (soft-free) da parte del medico: rimuove definitivamente il record.
+     * Consentito solo per appuntamenti non attivi (ANNULLATO/COMPLETATO) o comunque non nel futuro.
+     */
+    @DeleteMapping("/medico/{appuntamentoId}")
+    public ResponseEntity<?> eliminaStoricoAppuntamentoMedico(@PathVariable Long appuntamentoId,
+            Authentication authentication) {
+        CustomUserDetails userDetails = (CustomUserDetails) userDetailsService
+                .loadUserByUsername(authentication.getName());
+        Long medicoId = userDetails.getMedicoId();
+        try {
+            appuntamentoService.eliminaAppuntamentoStoricoMedico(appuntamentoId, medicoId);
+            return ResponseEntity.noContent().build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
 }

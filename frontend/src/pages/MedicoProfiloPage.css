@@ -1,0 +1,13 @@
+.bio-textarea {
+  resize: none;            /* blocca il ridimensionamento utente */
+  height: 160px;           /* dimensione fissa coerente con rows */
+  overflow: auto;          /* scroll interno se il testo eccede */
+  line-height: 1.4;        /* migliore leggibilità */
+}
+
+/* Opzionale: mantieni layout stabile su dispositivi piccoli */
+@media (max-width: 576px) {
+  .bio-textarea {
+    height: 140px;
+  }
+}

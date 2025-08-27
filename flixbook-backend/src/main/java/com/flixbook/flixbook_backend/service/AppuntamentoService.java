@@ -109,6 +109,30 @@ public class AppuntamentoService implements InitializingBean {
     }
 
     /**
+     * Elimina definitivamente un appuntamento dallo storico (solo medico proprietario).
+     * Consentito solo se appuntamento NON è attivo (non CONFERMATO) oppure è passato.
+     */
+    public void eliminaAppuntamentoStoricoMedico(Long appuntamentoId, Long medicoIdDaToken) {
+        Appuntamento appuntamento = appuntamentoRepository.findById(appuntamentoId)
+                .orElseThrow(() -> new IllegalArgumentException("Appuntamento non trovato."));
+
+        Medico medico = appuntamento.getMedico();
+        if (medico == null || !Objects.equals(medico.getId(), medicoIdDaToken)) {
+            throw new SecurityException("Non sei autorizzato a eliminare questo appuntamento.");
+        }
+
+        // Blocco eliminazione per appuntamenti ancora attivi nel futuro
+        boolean isAttivo = appuntamento.getStato() == StatoAppuntamento.CONFERMATO;
+        boolean isNelFuturo = appuntamento.getDataEOraInizio() != null && appuntamento.getDataEOraInizio().isAfter(LocalDateTime.now());
+        if (isAttivo && isNelFuturo) {
+            throw new IllegalStateException("Non è possibile eliminare un appuntamento ancora attivo.");
+        }
+
+        // Non modifichiamo lo stato dello Slot: per ANNULLATO è già libero; per COMPLETATO è passato
+        appuntamentoRepository.delete(appuntamento);
+    }
+
+    /**
      * Annulla un appuntamento su richiesta del PAZIENTE.
      */
     public void annullaAppuntamento(Long appuntamentoId, String pazienteEmail) {

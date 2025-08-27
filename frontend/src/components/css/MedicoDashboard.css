@@ -1,0 +1,38 @@
+/* Status label: plain colored text (no pill) */
+.status-chip {
+  display: inline-block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: lowercase;
+  white-space: nowrap;
+}
+.status-chip.success { color: #146c43; }
+.status-chip.secondary { color: #495057; }
+.status-chip.danger { color: #b02a37; }
+
+/* SVG status icon variant */
+/* Only text label kept */
+
+/* Modal pagination controls */
+.btn-group .disabled { pointer-events: none; }
+
+/* Profile avatar */
+.md-avatar-photo {
+  width: 88px;
+  height: 88px;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 2px solid #e9ecef;
+}
+.md-avatar-circle {
+  width: 88px;
+  height: 88px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #f1f3f5;
+  color: #495057;
+  font-weight: 700;
+  border: 2px solid #e9ecef;
+}

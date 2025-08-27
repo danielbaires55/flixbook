@@ -1,0 +1,76 @@
+:root {
+  --popover-bg: #fff;
+  --popover-border: rgba(0,0,0,0.1);
+  --popover-radius: 12px;
+  --shadow-lg: 0 10px 30px rgba(0,0,0,0.12);
+}
+
+.date-input-group .form-control {
+  cursor: pointer;
+  background-color: #fff;
+}
+
+.calendar-popover {
+  position: absolute;
+  z-index: 1050;
+  top: calc(100% + 8px);
+  left: 0;
+  background: var(--popover-bg);
+  border: 1px solid var(--popover-border);
+  border-radius: var(--popover-radius);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.calendar-header {
+  border-bottom: 1px solid var(--popover-border);
+  background: #f8f9fa;
+}
+
+/* Tighten react-calendar spacing and make it feel more polished */
+.react-calendar {
+  border: none !important;
+  font-family: inherit;
+}
+.react-calendar__navigation button {
+  min-width: 36px;
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+.react-calendar__month-view__weekdays {
+  text-transform: capitalize;
+  font-size: 0.85rem;
+}
+.react-calendar__tile {
+  border-radius: 8px;
+  padding: 10px 0;
+}
+.react-calendar__tile--active,
+.react-calendar__tile--now:enabled:hover,
+.react-calendar__tile--active:enabled:hover {
+  background: #0d6efd !important;
+  color: #fff !important;
+}
+.react-calendar__tile--now {
+  background: rgba(13,110,253,0.08);
+}
+
+/* Highlight for selected tiles in multi-select */
+.rc-multi-selected {
+  background: #0d6efd !important;
+  color: #fff !important;
+}
+
+/* Softer hover */
+.react-calendar__tile:enabled:hover {
+  background: rgba(13,110,253,0.12);
+}
+
+/* Small screen adjustments */
+@media (max-width: 576px) {
+  .calendar-popover {
+    left: 50%;
+    transform: translateX(-50%);
+    width: 95vw;
+  }
+}

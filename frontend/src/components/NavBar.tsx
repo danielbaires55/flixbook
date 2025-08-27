@@ -52,9 +52,9 @@ const NavBar: FC<NavBarProps> = ({ onSpecialitaClick, onMediciClick, onContattiC
   // 2. Link per la Dashboard del Medico/Collaboratore
   const medicoLinks = (
     <>
-  <Link to="/medico-dashboard" className="nav-link-button" onClick={() => setIsMobileMenuOpen(false)}>Dashboard</Link>
-  <Link to="/medico/create-blocco-orario" className="nav-link-button" onClick={() => setIsMobileMenuOpen(false)}>Gestisci Orari</Link>
-  <Link to="/medico/profilo" className="nav-link-button" onClick={() => setIsMobileMenuOpen(false)}>Profilo</Link>
+      <Link to="/medico-dashboard" className={`nav-link-button${isActive('/medico-dashboard')}`} onClick={() => setIsMobileMenuOpen(false)}>Dashboard</Link>
+      <Link to="/medico/create-blocco-orario" className={`nav-link-button${isActive('/medico/create-blocco-orario')}`} onClick={() => setIsMobileMenuOpen(false)}>Gestisci Orari</Link>
+      <Link to="/medico/profilo" className={`nav-link-button${isActive('/medico/profilo')}`} onClick={() => setIsMobileMenuOpen(false)}>Profilo</Link>
     </>
   );
 
@@ -71,11 +71,18 @@ const NavBar: FC<NavBarProps> = ({ onSpecialitaClick, onMediciClick, onContattiC
   // --- Sezione Autenticazione (Pulsanti a destra) ---
   const authSection = user ? (
     <div className="navbar-auth">
-    <Button variant="outlined" color="primary" onClick={() => handleNavigation(user.role === 'ROLE_PAZIENTE' ? '/paziente-dashboard' : '/medico-dashboard')} sx={{ mr: 1, display: { xs: 'none', md: 'inline-flex' } }}>
-      Bentornato!
-      </Button>
+      {isHomePage && (
+        <Button
+          variant="outlined"
+          color="primary"
+          onClick={() => handleNavigation(user.role === 'ROLE_PAZIENTE' ? '/paziente-dashboard' : '/medico-dashboard')}
+          sx={{ mr: 1, display: { xs: 'none', md: 'inline-flex' } }}
+        >
+          Bentornato!
+        </Button>
+      )}
       <Button variant="contained" color="primary" onClick={handleLogout}>
-      Logout
+        Logout
       </Button>
     </div>
   ) : (
