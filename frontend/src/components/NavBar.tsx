@@ -36,6 +36,8 @@ const NavBar: FC<NavBarProps> = ({ onSpecialitaClick, onMediciClick, onContattiC
     setIsMobileMenuOpen(false);
   }
 
+  const isActive = (path: string) => (location.pathname === path ? ' active' : '');
+
   // --- Definiamo i set di link per ogni scenario ---
 
   // 1. Link per la Homepage (utente non loggato)
@@ -59,10 +61,10 @@ const NavBar: FC<NavBarProps> = ({ onSpecialitaClick, onMediciClick, onContattiC
   // 3. Link per la Dashboard del Paziente (AGGIORNATO)
   const pazienteLinks = (
     <>
-  <Link to="/" className="nav-link-button" onClick={() => setIsMobileMenuOpen(false)}>Homepage</Link>
-  <Link to="/paziente-dashboard" className="nav-link-button" onClick={() => setIsMobileMenuOpen(false)}>I Miei Appuntamenti</Link>
-  <Link to="/book" className="nav-link-button" onClick={() => setIsMobileMenuOpen(false)}>Prenota</Link>
-  <Link to="/paziente/profilo" className="nav-link-button" onClick={() => setIsMobileMenuOpen(false)}>Profilo</Link>
+  <Link to="/" className={`nav-link-button${isActive('/')}`} onClick={() => setIsMobileMenuOpen(false)}>Homepage</Link>
+  <Link to="/paziente-dashboard" className={`nav-link-button${isActive('/paziente-dashboard')}`} onClick={() => setIsMobileMenuOpen(false)}>I Miei Appuntamenti</Link>
+  <Link to="/book" className={`nav-link-button${isActive('/book')}`} onClick={() => setIsMobileMenuOpen(false)}>Prenota</Link>
+  <Link to="/paziente/profilo" className={`nav-link-button${isActive('/paziente/profilo')}`} onClick={() => setIsMobileMenuOpen(false)}>Profilo</Link>
     </>
   );
   
@@ -122,15 +124,15 @@ const NavBar: FC<NavBarProps> = ({ onSpecialitaClick, onMediciClick, onContattiC
       </button>
 
       <div className={`mobile-menu ${isMobileMenuOpen ? 'active' : ''}`}>
-          {navLinksToShow}
+      {navLinksToShow}
           <div className="mobile-auth-divider" />
           {user ? (
               <>
-                  <button className="nav-link-button" onClick={() => handleNavigation(user.role === 'ROLE_PAZIENTE' ? '/paziente-dashboard' : '/medico-dashboard')}>Dashboard</button>
+          <button className={`nav-link-button${isActive(user.role === 'ROLE_PAZIENTE' ? '/paziente-dashboard' : '/medico-dashboard')}`} onClick={() => handleNavigation(user.role === 'ROLE_PAZIENTE' ? '/paziente-dashboard' : '/medico-dashboard')}>Dashboard</button>
                   <button className="nav-link-button" onClick={handleLogout}>Logout</button>
               </>
           ) : (
-              <Link to="/login" className="nav-link-button" onClick={() => setIsMobileMenuOpen(false)}>
+        <Link to="/login" className={`nav-link-button${isActive('/login')}`} onClick={() => setIsMobileMenuOpen(false)}>
                   Accedi / Registrati
               </Link>
           )}

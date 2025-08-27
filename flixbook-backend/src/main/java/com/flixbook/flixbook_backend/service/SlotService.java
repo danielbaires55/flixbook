@@ -45,8 +45,8 @@ public class SlotService {
 
     @Transactional
     public long cleanupExpiredSlots() {
-        // Elimina solo slot DISPONIBILE con data_ora_fine < now
-        return slotRepository.deleteByStatoAndDataEOraFineBefore(SlotStato.DISPONIBILE, LocalDateTime.now());
+    // Elimina solo slot DISPONIBILE con data_ora_fine < now che non sono referenziati da appuntamenti
+    return slotRepository.deleteUnreferencedByStatoAndDataEOraFineBefore(SlotStato.DISPONIBILE, LocalDateTime.now());
     }
 
     public List<LocalTime> findAvailableSlots(Long medicoId, Long prestazioneId, LocalDate data) {
@@ -124,14 +124,21 @@ public class SlotService {
         return slotDisponibili;
     }
 
-    public List<Map<String, Object>> findProssimiSlotDisponibili(Long prestazioneId, Long medicoId) {
-        System.out.println("=== DEBUG findProssimiSlotDisponibili ===");
-        System.out.println("prestazioneId: " + prestazioneId + ", medicoId: " + medicoId);
-        
+    public List<Map<String, Object>> findProssimiSlotDisponibili(Long prestazioneId, Long medicoId, Integer limit,
+                                                                 LocalDate fromDate, LocalDate toDate,
+                                                                 Integer fromHour, Integer toHour) {
         List<Map<String, Object>> tuttiSlot = new ArrayList<>();
         LocalDate oggi = LocalDate.now();
-        final int NUMERO_SLOT_DA_RESTITUIRE = 5;
-        final int GIORNI_MASSIMI_DI_RICERCA = 14; 
+        final int NUMERO_SLOT_DA_RESTITUIRE = (limit != null && limit > 0) ? limit : 15;
+        final int GIORNI_MASSIMI_DI_RICERCA = 30; 
+
+        // Normalize range
+        LocalDate startDate = (fromDate != null) ? fromDate : oggi;
+        LocalDate endDate = (toDate != null && !toDate.isBefore(startDate)) ? toDate : startDate.plusDays(GIORNI_MASSIMI_DI_RICERCA);
+        // Clamp endDate to max horizon
+        if (endDate.isAfter(oggi.plusDays(GIORNI_MASSIMI_DI_RICERCA))) {
+            endDate = oggi.plusDays(GIORNI_MASSIMI_DI_RICERCA);
+        }
 
         List<Medico> mediciDaControllare;
         if (medicoId != null) {
@@ -141,19 +148,18 @@ public class SlotService {
             mediciDaControllare = medicoRepository.findMediciByPrestazioneId(prestazioneId);
         }
 
-        System.out.println("Medici da controllare: " + mediciDaControllare.size());
-
         // Raccogli TUTTI gli slot disponibili
-        for (int i = 0; i < GIORNI_MASSIMI_DI_RICERCA; i++) {
-            LocalDate giornoCorrente = oggi.plusDays(i);
-            System.out.println("\n--- Controllo giorno: " + giornoCorrente + " ---");
-            
+    outer:
+    for (LocalDate giornoCorrente = startDate; !giornoCorrente.isAfter(endDate); giornoCorrente = giornoCorrente.plusDays(1)) {
             for (Medico medico : mediciDaControllare) {
+                if (tuttiSlot.size() >= NUMERO_SLOT_DA_RESTITUIRE) break outer;
                 List<LocalTime> slotDelGiorno = findAvailableSlots(medico.getId(), prestazioneId, giornoCorrente);
-                System.out.println("Dr. " + medico.getNome() + " " + medico.getCognome() + 
-                                 " - Slot trovati: " + slotDelGiorno);
                 
                 for (LocalTime oraInizio : slotDelGiorno) {
+                    if (tuttiSlot.size() >= NUMERO_SLOT_DA_RESTITUIRE) break outer;
+            // Apply hour window if provided
+            if (fromHour != null && oraInizio.getHour() < fromHour) continue;
+            if (toHour != null && oraInizio.getHour() > toHour) continue;
                     Map<String, Object> slotMap = new HashMap<>();
                     slotMap.put("data", giornoCorrente);
                     slotMap.put("oraInizio", oraInizio);
@@ -161,18 +167,8 @@ public class SlotService {
                     slotMap.put("medicoNome", medico.getNome());
                     slotMap.put("medicoCognome", medico.getCognome());
                     tuttiSlot.add(slotMap);
-                    
-                    System.out.println("Aggiunto slot: " + giornoCorrente + " " + oraInizio + 
-                                     " Dr. " + medico.getNome() + " " + medico.getCognome());
                 }
             }
-        }
-
-        System.out.println("\n=== PRIMA DELL'ORDINAMENTO ===");
-        for (int i = 0; i < Math.min(tuttiSlot.size(), 10); i++) {
-            Map<String, Object> slot = tuttiSlot.get(i);
-            System.out.println("Slot " + i + ": " + slot.get("data") + " " + slot.get("oraInizio") + 
-                             " Dr. " + slot.get("medicoNome") + " " + slot.get("medicoCognome"));
         }
 
         // ORDINA TUTTI gli slot raccolti cronologicamente
@@ -180,26 +176,10 @@ public class SlotService {
             .comparing((Map<String, Object> slot) -> (LocalDate) slot.get("data"))
             .thenComparing(slot -> (LocalTime) slot.get("oraInizio")));
 
-        System.out.println("\n=== DOPO L'ORDINAMENTO ===");
-        for (int i = 0; i < Math.min(tuttiSlot.size(), 10); i++) {
-            Map<String, Object> slot = tuttiSlot.get(i);
-            System.out.println("Slot " + i + ": " + slot.get("data") + " " + slot.get("oraInizio") + 
-                             " Dr. " + slot.get("medicoNome") + " " + slot.get("medicoCognome"));
-        }
-
         // Restituisci solo i primi 5
-        List<Map<String, Object>> risultato = tuttiSlot.size() <= NUMERO_SLOT_DA_RESTITUIRE 
+        return tuttiSlot.size() <= NUMERO_SLOT_DA_RESTITUIRE 
             ? tuttiSlot 
             : tuttiSlot.subList(0, NUMERO_SLOT_DA_RESTITUIRE);
-
-        System.out.println("\n=== RISULTATO FINALE ===");
-        for (int i = 0; i < risultato.size(); i++) {
-            Map<String, Object> slot = risultato.get(i);
-            System.out.println("Risultato " + i + ": " + slot.get("data") + " " + slot.get("oraInizio") + 
-                             " Dr. " + slot.get("medicoNome") + " " + slot.get("medicoCognome"));
-        }
-
-        return risultato;
     }
 
     public List<Map<String, Object>> findSlotsForDay(Long prestazioneId, Long medicoId, LocalDate data) {

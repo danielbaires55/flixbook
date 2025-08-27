@@ -39,6 +39,20 @@
     color: #0d6efd;
 }
 
+.nav-link-button.active {
+    color: #0d6efd;
+    position: relative;
+}
+.nav-link-button.active::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -6px;
+    height: 2px;
+    background: #0d6efd;
+}
+
 .navbar-auth {
     display: flex;
     align-items: center;

@@ -1,5 +1,155 @@
+/* Calendar overall card look */
+.react-calendar {
+  border: none !important;
+  background: #fff !important;
+  border-radius: 16px !important;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08) !important;
+  padding: 12px 12px 8px !important;
+  font-family: inherit;
+}
+
+/* Navigation (month/year + arrows) */
+.react-calendar__navigation {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.react-calendar__navigation button {
+  background: transparent;
+  color: #212529;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 10px;
+  min-width: 42px;
+  padding: 8px 10px;
+  transition: all 0.15s ease-in-out;
+}
+.react-calendar__navigation button:hover:not(:disabled) {
+  background: rgba(13, 110, 253, 0.08);
+  border-color: rgba(13, 110, 253, 0.2);
+}
+.react-calendar__navigation button:disabled {
+  opacity: 0.5;
+}
+.react-calendar__navigation__label {
+  flex: 1;
+  font-weight: 600;
+  border-color: transparent !important;
+}
+
+/* Weekday headings */
+.react-calendar__month-view__weekdays {
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  color: #6c757d;
+}
+.react-calendar__month-view__weekdays__weekday {
+  padding: 6px 0;
+}
+
+/* Day tiles */
+.react-calendar__tile {
+  border-radius: 10px;
+  padding: 10px 0 !important;
+  line-height: 1;
+  transition: all 0.15s ease-in-out;
+}
+.react-calendar__tile:enabled:hover {
+  background: rgba(13, 110, 253, 0.08);
+}
+.react-calendar__tile--now {
+  background: transparent !important;
+  color: #0d6efd;
+  box-shadow: inset 0 0 0 2px rgba(13, 110, 253, 0.35);
+}
+.react-calendar__tile--active,
+.react-calendar__tile--active:enabled:hover {
+  background: #0d6efd !important;
+  color: #fff !important;
+  box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3);
+}
+
+/* Weekend + disabled */
+.react-calendar__month-view__days__day--weekend {
+  color: #e03131;
+}
+.react-calendar__tile:disabled {
+  background: #f8f9fa !important;
+  color: #adb5bd !important;
+}
+
+/* Neighboring month days hidden for a cleaner look */
+.react-calendar__month-view__days__day--neighboringMonth {
+  color: transparent;
+  pointer-events: none;
+}
+
+/* Available-day: solid green fill */
 .available-day {
-  background-color: #e6f7ff !important;
-  color: #007bff !important;
-  font-weight: bold;
+  background: #198754 !important; /* Bootstrap success */
+  color: #fff !important;
+  font-weight: 600;
+}
+.available-day:hover {
+  background: #157347 !important;
+}
+.react-calendar__tile--active.available-day,
+.react-calendar__tile--active.available-day:enabled:hover {
+  background: #146c43 !important;
+  color: #fff !important;
+  box-shadow: 0 4px 12px rgba(20, 108, 67, 0.35);
+}
+/* Remove today ring when also available */
+.react-calendar__tile--now.available-day {
+  box-shadow: none !important;
+}
+
+/* Small dot indicator when a time filter is active */
+.available-dot {
+  position: relative;
+}
+.available-dot::after {
+  content: "";
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #fff; /* contrast on green */
+  box-shadow: 0 0 0 2px rgba(25, 135, 84, 0.5);
+}
+
+/* Two-column lists styling */
+.list-group .list-group-item {
+  transition: background-color 0.12s ease-in-out, transform 0.06s ease-in-out;
+}
+.list-group .list-group-item:hover {
+  background: #f8fbff;
+}
+.row.g-0 > .col-md-6:first-child {
+  border-right: 1px solid rgba(0,0,0,0.05);
+}
+
+/* Doctor avatar circle */
+.avatar-circle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  color: #0d6efd;
+  background: rgba(13, 110, 253, 0.08);
+}
+
+/* Doctor avatar image */
+.avatar-photo {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: inline-block;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.06);
 }

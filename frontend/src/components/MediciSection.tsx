@@ -27,7 +27,7 @@ function DoctorCard({ medico }: DoctorCardProps) {
       <div className="doctor-profile-image">
         <img 
           src={imageUrl} 
-          alt={`Profilo del Dr. ${medico.nome} ${medico.cognome}`} 
+          alt={`Profilo del Dott. ${medico.nome} ${medico.cognome}`} 
         />
       </div>
       <div className="doctor-name">{medico.nome} {medico.cognome}</div>

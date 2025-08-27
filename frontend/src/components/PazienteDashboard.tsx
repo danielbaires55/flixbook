@@ -137,12 +137,12 @@ const PazienteDashboard = () => {
                               {app.medico.imgProfUrl && (
                                 <img 
                                   src={`${SERVER_BASE_URL}${app.medico.imgProfUrl}`} 
-                                  alt={`Profilo del Dr. ${app.medico.cognome}`} 
+                                  alt={`Profilo del Dott. ${app.medico.cognome}`} 
                                   className="rounded-circle me-2" 
                                   style={{ width: '30px', height: '30px', objectFit: 'cover' }}
                                 />
                               )}
-                              <small className="text-muted">Dr. {app.medico.nome} {app.medico.cognome}</small>
+                              <small className="text-muted">Dott. {app.medico.nome} {app.medico.cognome}</small>
                             </div>
                             <small className="text-muted d-block mt-1">Prestazione: {app.prestazione.nome} ({app.prestazione.costo}€)</small>
                           </>

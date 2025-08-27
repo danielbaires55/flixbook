@@ -4,6 +4,8 @@ import com.flixbook.flixbook_backend.model.Slot;
 import com.flixbook.flixbook_backend.model.SlotStato;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -30,4 +32,8 @@ public interface SlotRepository extends JpaRepository<Slot, Long> {
     Optional<Slot> lockByMedicoAndStart(Long medicoId, LocalDateTime dataEOraInizio);
 
     long deleteByStatoAndDataEOraFineBefore(SlotStato stato, LocalDateTime cutoff);
+
+    @Modifying
+    @Query("delete from Slot s where s.stato = :stato and s.dataEOraFine < :cutoff and not exists (select 1 from Appuntamento a where a.slot = s)")
+    int deleteUnreferencedByStatoAndDataEOraFineBefore(@Param("stato") SlotStato stato, @Param("cutoff") LocalDateTime cutoff);
 }

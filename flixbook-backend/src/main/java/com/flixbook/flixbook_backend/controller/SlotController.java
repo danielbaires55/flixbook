@@ -35,8 +35,13 @@ public class SlotController {
     @GetMapping("/prossimi-disponibili")
     public ResponseEntity<List<Map<String, Object>>> getProssimiSlot(
             @RequestParam Long prestazioneId,
-            @RequestParam(required = false) Long medicoId) {
-        List<Map<String, Object>> slots = slotService.findProssimiSlotDisponibili(prestazioneId, medicoId);
+            @RequestParam(required = false) Long medicoId,
+            @RequestParam(required = false) Integer limit,
+            @RequestParam(required = false) java.time.LocalDate fromDate,
+            @RequestParam(required = false) java.time.LocalDate toDate,
+            @RequestParam(required = false) Integer fromHour,
+            @RequestParam(required = false) Integer toHour) {
+        List<Map<String, Object>> slots = slotService.findProssimiSlotDisponibili(prestazioneId, medicoId, limit, fromDate, toDate, fromHour, toHour);
         return ResponseEntity.ok(slots);
     }
     

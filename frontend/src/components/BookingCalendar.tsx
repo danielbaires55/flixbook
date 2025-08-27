@@ -6,6 +6,8 @@ import axios from "axios";
 import "./css/BookingCalendar.css";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/useAuth";
+import { Modal, Button, Toast, ToastContainer, OverlayTrigger, Tooltip } from "react-bootstrap";
+import NavBar from "./NavBar";
 
 const API_BASE_URL = "http://localhost:8080/api";
 
@@ -26,6 +28,7 @@ interface Medico {
   id: number;
   nome: string;
   cognome: string;
+  imgProfUrl?: string;
 }
 
 interface SlotDisponibile {
@@ -50,14 +53,29 @@ const BookingCalendar: React.FC = () => {
   const [selectedMedicoId, setSelectedMedicoId] = useState<string>("");
 
   // Stati per il calendario e la nuova lista di slot
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [selectedDate] = useState<Date>(new Date());
+  const [selectedDateFilter, setSelectedDateFilter] = useState<Date | null>(null);
+  const [selectedDateToFilter, setSelectedDateToFilter] = useState<Date | null>(null);
+  const rangeInvalid = !!(selectedDateFilter && selectedDateToFilter && (selectedDateToFilter.getTime() < selectedDateFilter.getTime()));
+  const [showDateModal, setShowDateModal] = useState<boolean>(false);
   const [prossimiSlot, setProssimiSlot] = useState<SlotDisponibile[]>([]);
-  const [slotDelGiorno, setSlotDelGiorno] = useState<string[]>([]);
+  // Giorni con disponibilità (per evidenziare nel calendario)
+  const [availableDaysSet, setAvailableDaysSet] = useState<Set<string>>(new Set());
+
+  // Filtro orario: "all" | "morning" (09-12) | "afternoon" (13-17) | "range-<start>-<end>" (es. range-9-10)
+  const [timeFilter, setTimeFilter] = useState<string>("all");
 
   // Stati di UI
   const [loadingSlots, setLoadingSlots] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  // Help UI states
+  const [showHelpToast, setShowHelpToast] = useState<boolean>(false);
+  const [showHelpModal, setShowHelpModal] = useState<boolean>(false);
+  // Conferma prenotazione
+  const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
+  const [pendingSlot, setPendingSlot] = useState<SlotDisponibile | null>(null);
+  const [bookingSubmitting, setBookingSubmitting] = useState<boolean>(false);
 
   const toYYYYMMDD = (date: Date): string => {
     const offset = date.getTimezoneOffset();
@@ -65,12 +83,71 @@ const BookingCalendar: React.FC = () => {
     return adjustedDate.toISOString().split("T")[0];
   };
 
+  // (UI) evidenziazione disponibilità: i parametri orari verranno calcolati inline
+
+  // Helper per costruire la URL assoluta della foto profilo del medico
+  const buildPhotoUrl = (url?: string | null): string | null => {
+    if (!url) return null;
+    if (url.startsWith("http://") || url.startsWith("https://")) return url;
+    // Prefissa il backend host se è un path relativo (es. /prof_img/..)
+    if (url.startsWith("/")) return `http://localhost:8080${url}`;
+    return `http://localhost:8080/${url}`;
+  };
+
+  // Carica i giorni con almeno una disponibilità nel mese visibile (se prestazione + medico selezionati)
+  const caricaGiorniDisponibiliMese = useCallback(async (activeDate: Date) => {
+    if (!selectedPrestazioneId || !selectedMedicoId) {
+      setAvailableDaysSet(new Set());
+      return;
+    }
+    try {
+      const monthStart = new Date(activeDate.getFullYear(), activeDate.getMonth(), 1);
+      const monthEnd = new Date(activeDate.getFullYear(), activeDate.getMonth() + 1, 0);
+      const params: Record<string, string | number> = {
+        prestazioneId: selectedPrestazioneId,
+        medicoId: selectedMedicoId,
+        fromDate: toYYYYMMDD(monthStart),
+        toDate: toYYYYMMDD(monthEnd),
+        limit: 1000, // sufficiente per un mese
+      };
+      // Aggiungi filtro orario coerente con la tendina (inline per evitare deps del callback)
+      if (timeFilter === "morning") { params.fromHour = 9; params.toHour = 12; }
+      else if (timeFilter === "afternoon") { params.fromHour = 13; params.toHour = 17; }
+      else if (timeFilter.startsWith("range-")) {
+        const [, sh, eh] = timeFilter.split("-");
+        params.fromHour = parseInt(sh, 10);
+        params.toHour = parseInt(eh, 10);
+      }
+      const { data } = await axios.get<SlotDisponibile[]>(`${API_BASE_URL}/slots/prossimi-disponibili`, { params });
+      const days = new Set<string>();
+      for (const s of data) days.add(s.data);
+      setAvailableDaysSet(days);
+    } catch {
+      // Silenzioso: l'evidenziazione è "best-effort"
+      setAvailableDaysSet(new Set());
+    }
+  }, [selectedPrestazioneId, selectedMedicoId, timeFilter]);
+
   // Caricamento iniziale delle specialità
   useEffect(() => {
     axios
       .get<Specialita[]>(`${API_BASE_URL}/specialita`)
       .then((response) => setSpecialitaList(response.data))
       .catch((error) => console.error("Errore nel recupero delle specialità", error));
+  }, []);
+
+  // Mostra un aiuto automatico la prima volta (una sola volta per sessione)
+  useEffect(() => {
+    try {
+      const seen = localStorage.getItem("booking_help_seen");
+      if (!seen) {
+        setShowHelpToast(true);
+        const t = setTimeout(() => setShowHelpToast(false), 6000);
+        return () => clearTimeout(t);
+      }
+    } catch {
+      // ignora
+    }
   }, []);
 
   // Caricamento prestazioni quando cambia la specialità
@@ -110,126 +187,119 @@ const BookingCalendar: React.FC = () => {
   // Svuota gli slot mostrati quando cambia il medico selezionato
   useEffect(() => {
     setProssimiSlot([]);
-    setSlotDelGiorno([]);
     setError(null);
     // il caricamento reale verrà innescato dall'effetto più sotto
   }, [selectedMedicoId]);
 
   // Funzione per ottenere i prossimi giorni con disponibilità
-  const getProssimiGiorni = useCallback((numGiorni: number = 10): string[] => {
-    const giorni: string[] = [];
-    const oggi = new Date();
-    
-    for (let i = 0; i < numGiorni; i++) {
-      const data = new Date(oggi);
-      data.setDate(oggi.getDate() + i);
-      giorni.push(toYYYYMMDD(data));
-    }
-    
-    return giorni;
-  }, []);
+  // (rimosso: calcolo client-side dei giorni, ora delegato all'endpoint)
 
-  // Funzione per caricare i primi 5 slot realmente disponibili
-  const caricaPrimiSlotDisponibili = useCallback(async () => {
+  // Carica i prossimi slot disponibili (server-side, fino a 15)
+  const caricaPrimeVisite = useCallback(async () => {
     if (!selectedPrestazioneId) return;
-
     setLoadingSlots(true);
     setError(null);
     setProssimiSlot([]);
-
     try {
-      const prossimiGiorni = getProssimiGiorni(14); // Controlla i prossimi 14 giorni
-      const tuttiSlot: SlotDisponibile[] = [];
-
-      // Se c'è un medico selezionato, usa solo quello
-      const mediciDaControllare = selectedMedicoId 
-        ? [{ id: parseInt(selectedMedicoId), nome: '', cognome: '' }]
-        : mediciList;
-
-      for (const giorno of prossimiGiorni) {
-        if (tuttiSlot.length >= 5) break; // Fermiamo quando abbiamo già 5 slot
-
-        for (const medico of mediciDaControllare) {
-          if (tuttiSlot.length >= 5) break;
-
-          try {
-            const response = await axios.get<string[]>(`${API_BASE_URL}/slots/available`, {
-              params: {
-                prestazioneId: selectedPrestazioneId,
-                medicoId: medico.id.toString(),
-                data: giorno,
-              },
-            });
-
-            if (response.data.length > 0) {
-              // Trova i dati del medico
-              const medicoInfo = mediciList.find(m => m.id === medico.id);
-              
-              // Aggiungi tutti gli slot di questo medico per questo giorno
-              for (const ora of response.data) {
-                if (tuttiSlot.length >= 5) break;
-                
-                tuttiSlot.push({
-                  data: giorno,
-                  oraInizio: ora,
-                  medicoId: medico.id,
-                  medicoNome: medicoInfo?.nome || '',
-                  medicoCognome: medicoInfo?.cognome || ''
-                });
-              }
-            }
-          } catch  {
-            // Ignora errori per singoli giorni/medici
-            console.log(`Nessun slot disponibile per ${giorno} con medico ${medico.id}`);
-          }
-        }
+      const params: Record<string, string | number> = {
+        prestazioneId: selectedPrestazioneId,
+        // Richiedi un numero maggiore per consentire filtri orari senza esaurire i risultati
+        limit: 60,
+      };
+  if (selectedMedicoId) params.medicoId = selectedMedicoId;
+      // Se c'è un range attivo, passalo all'endpoint
+      if (selectedDateFilter) params.fromDate = toYYYYMMDD(selectedDateFilter);
+      if (selectedDateToFilter) params.toDate = toYYYYMMDD(selectedDateToFilter);
+      // Passiamo anche un filtro orario server-side coerente con la tendina (ottimizzazione):
+      if (timeFilter === "morning") { params.fromHour = 9; params.toHour = 12; }
+      else if (timeFilter === "afternoon") { params.fromHour = 13; params.toHour = 17; }
+      else if (timeFilter.startsWith("range-")) {
+        const [, sh, eh] = timeFilter.split("-");
+        params.fromHour = parseInt(sh, 10);
+        params.toHour = parseInt(eh, 10);
       }
-
-      // Ordina tutti gli slot trovati cronologicamente
-      const slotsOrdinati = tuttiSlot.sort((a, b) => {
-        const dataA = new Date(`${a.data}T${a.oraInizio}`);
-        const dataB = new Date(`${b.data}T${b.oraInizio}`);
-        return dataA.getTime() - dataB.getTime();
+      const { data } = await axios.get<SlotDisponibile[]>(`${API_BASE_URL}/slots/prossimi-disponibili`, { params });
+      // Ordina cronologicamente per sicurezza
+      const ordinati = [...data].sort((a, b) => {
+        const da = new Date(`${a.data}T${a.oraInizio}`);
+        const db = new Date(`${b.data}T${b.oraInizio}`);
+        return da.getTime() - db.getTime();
       });
-
-      setProssimiSlot(slotsOrdinati.slice(0, 5));
+  // Non tagliare qui: i filtri orari vengono applicati dopo; taglio a 30 solo in render
+  setProssimiSlot(ordinati);
     } catch  {
-      setError("Errore nel caricamento delle disponibilità.");
+      setError("Errore nel caricamento delle prime visite.");
     } finally {
       setLoadingSlots(false);
     }
-  }, [selectedPrestazioneId, selectedMedicoId, mediciList, getProssimiGiorni]);
+  }, [selectedPrestazioneId, selectedMedicoId, selectedDateFilter, selectedDateToFilter, timeFilter]);
 
-  // Caricamento slot disponibili quando cambia prestazione o medico
-  useEffect(() => {
-    if (selectedPrestazioneId && mediciList.length > 0) {
-      caricaPrimiSlotDisponibili();
+  // Helper per caricare gli slot del giorno corrente del filtro
+  const caricaSlotPerDataSelezionata = useCallback(async () => {
+    if (!selectedPrestazioneId || !selectedDateFilter) return;
+    setLoadingSlots(true);
+    setError(null);
+    try {
+      const params: Record<string, string> = {
+        prestazioneId: selectedPrestazioneId,
+        data: toYYYYMMDD(selectedDateFilter),
+      };
+      if (selectedMedicoId) params.medicoId = selectedMedicoId;
+      const { data } = await axios.get<SlotDisponibile[]>(`${API_BASE_URL}/slots/available-by-day`, { params });
+      const ordinati = [...data].sort((a, b) => {
+        const da = new Date(`${a.data}T${a.oraInizio}`);
+        const db = new Date(`${b.data}T${b.oraInizio}`);
+        return da.getTime() - db.getTime();
+      });
+  // Non tagliare qui: i filtri orari vengono applicati dopo; taglio a 30 solo in render
+  setProssimiSlot(ordinati);
+    } catch  {
+      setError("Errore nel caricamento degli slot per la data selezionata.");
+    } finally {
+      setLoadingSlots(false);
     }
-  }, [selectedPrestazioneId, selectedMedicoId, mediciList, caricaPrimiSlotDisponibili]);
+  }, [selectedPrestazioneId, selectedDateFilter, selectedMedicoId]);
 
-  const handleDateClick = (date: Date) => {
-    setSelectedDate(date);
+  // Caricamento slot quando cambia prestazione o medico: rispetta singolo giorno o range
+  useEffect(() => {
+    if (!selectedPrestazioneId) return;
+    if (selectedDateToFilter) {
+      // Range attivo: usa endpoint prossimi-disponibili con from/to
+      caricaPrimeVisite();
+    } else if (selectedDateFilter) {
+      caricaSlotPerDataSelezionata();
+    } else {
+      caricaPrimeVisite();
+    }
+  }, [selectedPrestazioneId, selectedMedicoId, selectedDateFilter, selectedDateToFilter, caricaPrimeVisite, caricaSlotPerDataSelezionata]);
 
-    if (!selectedPrestazioneId || !selectedMedicoId) {
-      alert("Per favore, seleziona prima una prestazione e un medico per vedere gli orari.");
+  // Applica filtro per data (via modal) caricando gli slot del giorno
+  const applicaFiltroData = async () => {
+  if (!selectedPrestazioneId || !selectedDateFilter) {
+      setShowDateModal(false);
       return;
     }
+    // Se è stato scelto anche "al", esegui ricerca range; altrimenti singolo giorno
+    if (selectedDateToFilter) {
+      await caricaPrimeVisite();
+    } else {
+      await caricaSlotPerDataSelezionata();
+    }
+    setShowDateModal(false);
+  };
 
-    setLoadingSlots(true);
-    setSlotDelGiorno([]);
-    const dataFormattata = toYYYYMMDD(date);
+  // Quando apro il modal, carico le disponibilità del mese corrente (se medico selezionato)
+  useEffect(() => {
+    if (!showDateModal) return;
+    const base = selectedDateFilter || new Date();
+    caricaGiorniDisponibiliMese(base);
+  }, [showDateModal, selectedPrestazioneId, selectedMedicoId, selectedDateFilter, timeFilter, caricaGiorniDisponibiliMese]);
 
-    axios
-      .get<string[]>(`${API_BASE_URL}/slots/available`, {
-        params: {
-          prestazioneId: selectedPrestazioneId,
-          medicoId: selectedMedicoId,
-          data: dataFormattata,
-        },
-      })
-      .then((res) => setSlotDelGiorno(res.data))
-      .catch(() => setError("Errore nel caricare gli orari per questa data."))
-      .finally(() => setLoadingSlots(false));
+  const resetFiltri = () => {
+    setSelectedDateFilter(null);
+    setSelectedDateToFilter(null);
+    setTimeFilter("all");
+    caricaPrimeVisite();
   };
 
   const handleBooking = async (
@@ -270,15 +340,89 @@ const BookingCalendar: React.FC = () => {
     }
   };
 
+  // Apre la modale di conferma con il riepilogo
+  const openConfirm = (slot: SlotDisponibile) => {
+    if (!user) {
+      navigate("/login");
+      return;
+    }
+    setPendingSlot(slot);
+    setShowConfirmModal(true);
+  };
+
+  // Conferma definitiva: chiama l'API di prenotazione
+  const confirmBooking = async () => {
+    if (!pendingSlot) return;
+    setBookingSubmitting(true);
+    setError(null);
+    try {
+      await handleBooking(pendingSlot);
+      setShowConfirmModal(false);
+      setPendingSlot(null);
+    } finally {
+      setBookingSubmitting(false);
+    }
+  };
+
   return (
-    <div className="container mt-5">
+    <>
+      <NavBar />
+      <div className="container mt-5">
       <div className="row justify-content-center">
         <div className="col-lg-10">
           <div className="card shadow-sm">
             <div className="card-body p-4">
-              <h1 className="card-title text-center mb-4">
-                Prenota il tuo appuntamento
-              </h1>
+              <h1 className="card-title text-center mb-2">Prenota il tuo appuntamento</h1>
+              <div className="d-flex justify-content-end mb-3">
+                <OverlayTrigger
+                  placement="left"
+                  overlay={<Tooltip id="help-tooltip">Come prenotare</Tooltip>}
+                >
+                  <button
+                    type="button"
+                    aria-label="Guida: come prenotare"
+                    className="btn btn-sm btn-outline-info rounded-circle d-inline-flex align-items-center justify-content-center"
+                    style={{ width: 34, height: 34, padding: 0, lineHeight: 1 }}
+                    onClick={() => {
+                      setShowHelpModal(true);
+                      try {
+                        localStorage.setItem("booking_help_seen", "1");
+                      } catch {
+                        /* ignore storage error */
+                      }
+                      setShowHelpToast(false);
+                    }}
+                  >
+                    {/* Inline SVG question-circle icon */}
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" aria-hidden>
+                      <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1m0 1.5a5.5 5.5 0 1 1 0 11A5.5 5.5 0 0 1 8 2.5"/>
+                      <path d="M5.255 5.786a.237.237 0 0 0 .241.247h.825c.138 0 .248-.113.266-.25.09-.656.54-1.134 1.342-1.134.686 0 1.314.343 1.314 1 0 .486-.228.777-.856 1.106-.778.392-1.267.9-1.267 1.777v.07c0 .146.12.265.266.265h.808a.27.27 0 0 0 .27-.27c0-.705.273-.928 1.01-1.3.609-.304 1.244-.82 1.244-1.73 0-1.328-1.115-2.048-2.334-2.048-1.19 0-2.23.595-2.309 1.917m1.557 4.345c0 .364.287.65.667.65.395 0 .673-.286.673-.65 0-.373-.278-.66-.673-.66-.38 0-.667.287-.667.66"/>
+                    </svg>
+                  </button>
+                </OverlayTrigger>
+              </div>
+
+              {/* Toast di aiuto (auto) */}
+              <ToastContainer position="top-end" className="p-3">
+                <Toast
+                  show={showHelpToast}
+                  onClose={() => {
+                    setShowHelpToast(false);
+                    try { localStorage.setItem("booking_help_seen", "1"); } catch { /* ignore */ }
+                  }}
+                  delay={6000}
+                  autohide
+                  bg="light"
+                >
+                  <Toast.Header closeButton>
+                    <strong className="me-auto">Come prenotare</strong>
+                  </Toast.Header>
+                  <Toast.Body>
+                    1) Scegli specialità e prestazione, 2) (opzionale) medico, 3) filtra per data/orario,
+                    4) scegli uno slot e premi "Prenota".
+                  </Toast.Body>
+                </Toast>
+              </ToastContainer>
               
               {error && <div className="alert alert-danger">{error}</div>}
               {success && <div className="alert alert-success">{success}</div>}
@@ -286,13 +430,13 @@ const BookingCalendar: React.FC = () => {
               {/* Filtri di selezione */}
               <div className="row g-3 mb-4">
                 <div className="col-md-4">
-                  <label className="form-label">Specialità</label>
+                  <label className="form-label fw-semibold mb-1">Specialità</label>
                   <select
                     className="form-select"
                     onChange={(e) => setSelectedSpecialitaId(e.target.value)}
                     value={selectedSpecialitaId}
                   >
-                    <option value="">Scegli...</option>
+                    <option value="">Seleziona specialità…</option>
                     {specialitaList.map((s) => (
                       <option key={s.id} value={s.id}>
                         {s.nome}
@@ -302,14 +446,14 @@ const BookingCalendar: React.FC = () => {
                 </div>
                 
                 <div className="col-md-4">
-                  <label className="form-label">Prestazione</label>
+                  <label className="form-label fw-semibold mb-1">Prestazione</label>
                   <select
                     className="form-select"
                     onChange={(e) => setSelectedPrestazioneId(e.target.value)}
                     value={selectedPrestazioneId}
                     disabled={!selectedSpecialitaId}
                   >
-                    <option value="">Scegli...</option>
+                    <option value="">Seleziona prestazione…</option>
                     {prestazioniList.map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.nome} - {p.costo}€
@@ -319,9 +463,9 @@ const BookingCalendar: React.FC = () => {
                 </div>
                 
                 <div className="col-md-4">
-                  <label className="form-label">
-                    Medico (Opzionale)
-                    <small className="text-muted d-block">Lascia vuoto per vedere tutti i medici</small>
+                  <label className="form-label d-flex align-items-center justify-content-between fw-semibold mb-1">
+                    <span>Medico</span>
+                    <span className="badge rounded-pill text-bg-secondary">Opzionale</span>
                   </label>
                   <select
                     className="form-select"
@@ -330,131 +474,354 @@ const BookingCalendar: React.FC = () => {
                     disabled={!selectedPrestazioneId}
                   >
                     <option value="">Tutti i medici disponibili</option>
-                    {mediciList.map((m) => (
+          {mediciList.map((m) => (
                       <option key={m.id} value={m.id}>
-                        Dr. {m.nome} {m.cognome}
+            Dott. {m.nome} {m.cognome}
                       </option>
                     ))}
                   </select>
+                  <div className="form-text">Lascia vuoto per vedere tutti i medici</div>
                 </div>
               </div>
+
+              {/* Sezione filtri rapidi */}
+              {selectedPrestazioneId && (
+                <div className="card mb-3 border-0 shadow-sm">
+                  <div className="card-body d-flex flex-wrap gap-3 align-items-center">
+                    <Button variant="outline-primary" size="sm" onClick={() => setShowDateModal(true)} className="d-inline-flex align-items-center gap-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16" aria-hidden>
+                        <path d="M3.5 0a.5.5 0 0 1 .5.5V1h8V.5a.5.5 0 0 1 1 0V1h1a2 2 0 0 1 2 2v1H0V3a2 2 0 0 1 2-2h1V.5a.5.5 0 0 1 .5-.5"/>
+                        <path d="M16 14V5H0v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2M2 7h2v2H2zm3 0h2v2H5zm3 0h2v2H8zm3 0h2v2h-2zM2 10h2v2H2zm3 0h2v2H5zm3 0h2v2H8zm3 0h2v2h-2z"/>
+                      </svg>
+                      Filtra per data
+                    </Button>
+                    <div className="ms-2">
+                      <label className="form-label me-2 mb-0 fw-semibold">Orario</label>
+                      <select
+                        className="form-select form-select-sm d-inline-block"
+                        style={{ width: 220 }}
+                        value={timeFilter}
+                        onChange={(e) => setTimeFilter(e.target.value)}
+                      >
+                        <option value="all">Tutto il giorno</option>
+                        <option value="morning">Mattina (09:00 - 12:00)</option>
+                        <option value="afternoon">Pomeriggio (13:00 - 17:00)</option>
+                        <option value="range-9-10">09:00 - 10:00</option>
+                        <option value="range-10-11">10:00 - 11:00</option>
+                        <option value="range-11-12">11:00 - 12:00</option>
+                        <option value="range-13-14">13:00 - 14:00</option>
+                        <option value="range-14-15">14:00 - 15:00</option>
+                        <option value="range-15-16">15:00 - 16:00</option>
+                        <option value="range-16-17">16:00 - 17:00</option>
+                      </select>
+                    </div>
+                    <button className="btn btn-link btn-sm ms-auto" onClick={resetFiltri}>Pulisci filtri</button>
+                  </div>
+                </div>
+              )}
 
               {/* Sezione slot disponibili */}
               {selectedPrestazioneId && (
                 <div className="card mt-4">
-                  <div className="card-header">
-                    <div className="d-flex justify-content-between align-items-center">
-                      <span>Primi 5 slot disponibili</span>
-                      {selectedMedicoId && (
+                  <div className="card-header bg-white">
+                    <div className="d-flex justify-content-between align-items-center" style={{gap: 12}}>
+                      <span className="fw-semibold">Prime visite disponibili (max 30)</span>
+            {selectedMedicoId && (
                         <small className="text-muted">
-                          Filtrato per: Dr. {mediciList.find(m => m.id === parseInt(selectedMedicoId))?.nome} {mediciList.find(m => m.id === parseInt(selectedMedicoId))?.cognome}
+              Filtrato per: Dott. {mediciList.find(m => m.id === parseInt(selectedMedicoId))?.nome} {mediciList.find(m => m.id === parseInt(selectedMedicoId))?.cognome}
                         </small>
+                      )}
+                      {selectedDateToFilter && selectedDateFilter ? (
+                        <small className="text-muted">
+                          Dal {selectedDateFilter.toLocaleDateString("it-IT")} al {selectedDateToFilter.toLocaleDateString("it-IT")}
+                        </small>
+                      ) : selectedDateFilter ? (
+                        <small className="text-muted">
+                          Data: {selectedDateFilter.toLocaleDateString("it-IT")}
+                        </small>
+                      ) : null}
+                    </div>
+                    {/* Riepilogo filtri attivi */}
+                    <div className="mt-2 d-flex flex-wrap gap-2">
+                      {selectedPrestazioneId && (
+                        <span className="badge text-bg-light d-inline-flex align-items-center gap-1">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16" aria-hidden>
+                            <path d="M8 0a5 5 0 0 0-5 5v3.5L2 10v1h12v-1l-1-.5V5a5 5 0 0 0-5-5"/>
+                          </svg>
+                          Prestazione
+                        </span>
+                      )}
+                      {selectedMedicoId && (
+                        <span className="badge text-bg-light">Dott. {mediciList.find(m => m.id === parseInt(selectedMedicoId))?.nome} {mediciList.find(m => m.id === parseInt(selectedMedicoId))?.cognome}</span>
+                      )}
+                      {selectedDateToFilter && selectedDateFilter ? (
+                        <span className="badge text-bg-light">Dal {selectedDateFilter.toLocaleDateString("it-IT")} al {selectedDateToFilter.toLocaleDateString("it-IT")}</span>
+                      ) : selectedDateFilter ? (
+                        <span className="badge text-bg-light">{selectedDateFilter.toLocaleDateString("it-IT")}</span>
+                      ) : null}
+                      {timeFilter !== 'all' && (
+                        <span className="badge text-bg-light d-inline-flex align-items-center gap-1">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16" aria-hidden>
+                            <path d="M8 3.5a.5.5 0 0 1 .5.5v4l3 1.5a.5.5 0 1 1-.5.866l-3.5-1.75A.5.5 0 0 1 7 8V4a.5.5 0 0 1 .5-.5"/>
+                            <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m0-1A7 7 0 1 1 8 1a7 7 0 0 1 0 14"/>
+                          </svg>
+                          Orario: {timeFilter.replace('range-', '').replace('-', ':00-')}{timeFilter.startsWith('range-') ? ':00' : ''}
+                        </span>
                       )}
                     </div>
                   </div>
-                  <ul className="list-group list-group-flush">
+                  <div className="list-group list-group-flush">
                     {loadingSlots && (
-                      <li className="list-group-item text-center">
+                      <div className="list-group-item text-center">
                         <div className="spinner-border spinner-border-sm me-2" role="status"></div>
                         Caricamento slot disponibili...
-                      </li>
+                      </div>
                     )}
-                    
+
                     {!loadingSlots && prossimiSlot.length === 0 && (
-                      <li className="list-group-item text-center text-muted">
+                      <div className="list-group-item text-center text-muted">
                         Nessuna disponibilità trovata per questa prestazione.
                         {selectedMedicoId && " Prova a rimuovere il filtro medico."}
-                      </li>
+                      </div>
                     )}
-                    
-                    {(selectedMedicoId
+
+                    {(() => {
+                      const withinTime = (s: SlotDisponibile) => {
+                        // Estrai ora: gestisce 'HH:mm' o 'HH:mm:ss'
+                        const [hStr] = s.oraInizio.split(":");
+                        const h = parseInt(hStr, 10);
+                        if (timeFilter === "all") return true;
+                        if (timeFilter === "morning") return h >= 9 && h < 12;
+                        if (timeFilter === "afternoon") return h >= 13 && h <= 17;
+                        if (timeFilter.startsWith("range-")) {
+                          const [, start, end] = timeFilter.split("-");
+                          const sh = parseInt(start, 10);
+                          const eh = parseInt(end, 10);
+                          return h >= sh && h < eh;
+                        }
+                        return true;
+                      };
+
+                      const base = selectedMedicoId
                         ? prossimiSlot.filter(s => s.medicoId === parseInt(selectedMedicoId))
-                        : prossimiSlot
-                      ).map((slot, index) => {
-                      const dataSlot = new Date(`${slot.data}T${slot.oraInizio}`);
-                      const isOggi = slot.data === toYYYYMMDD(new Date());
-                      
-                      return (
-                        <li
-                          key={`${slot.data}-${slot.oraInizio}-${slot.medicoId}`}
-                          className="list-group-item d-flex justify-content-between align-items-center"
-                        >
-                          <div>
-                            <strong>Dr. {slot.medicoNome} {slot.medicoCognome}</strong>
-                            <br />
-                            <small className="text-muted">
-                              {isOggi ? "Oggi" : dataSlot.toLocaleDateString("it-IT", {
-                                weekday: "long",
-                                day: "numeric",
-                                month: "long",
-                              })} alle <strong>{slot.oraInizio}</strong>
-                            </small>
-                            {index === 0 && (
-                              <span className="badge bg-success ms-2">Più vicino</span>
-                            )}
-                          </div>
-                          <button
-                            className="btn btn-primary btn-sm"
-                            onClick={() => handleBooking(slot)}
+                        : prossimiSlot;
+                      const filteredAll = base.filter(withinTime).slice(0, 30);
+                      const left = filteredAll.slice(0, 15);
+                      const right = filteredAll.slice(15, 30);
+
+                      const renderItem = (slot: SlotDisponibile) => {
+                        const dataSlot = new Date(`${slot.data}T${slot.oraInizio}`);
+                        const isOggi = slot.data === toYYYYMMDD(new Date());
+                        const initials = `${slot.medicoNome?.[0] || ''}${slot.medicoCognome?.[0] || ''}`.toUpperCase();
+                        const medico = mediciList.find(m => m.id === slot.medicoId);
+                        const photoUrl = buildPhotoUrl(medico?.imgProfUrl || null);
+                        return (
+                          <li
+                            key={`${slot.data}-${slot.oraInizio}-${slot.medicoId}`}
+                            className="list-group-item d-flex justify-content-between align-items-center"
                           >
-                            Prenota
-                          </button>
-                        </li>
+                            <div className="d-flex align-items-center gap-3">
+                              {photoUrl ? (
+                                <img
+                                  src={photoUrl}
+                                  alt={`Foto profilo di Dott. ${slot.medicoNome} ${slot.medicoCognome}`}
+                                  className="avatar-photo"
+                                  loading="lazy"
+                                  width={36}
+                                  height={36}
+                                />
+                              ) : (
+                                <div className="avatar-circle" aria-hidden>{initials || 'DR'}</div>
+                              )}
+                              <div>
+                                <div className="fw-semibold">Dott. {slot.medicoNome} {slot.medicoCognome}</div>
+                                <div className="text-muted small">
+                                  {isOggi ? "Oggi" : dataSlot.toLocaleDateString("it-IT", {
+                                    weekday: "long",
+                                    year: "numeric",
+                                    month: "2-digit",
+                                    day: "2-digit",
+                                  })}
+                                  <span className="badge rounded-pill text-bg-light ms-2">{slot.oraInizio.slice(0,5)}</span>
+                                </div>
+                              </div>
+                            </div>
+                            <button
+                              className="btn btn-sm btn-success"
+                              onClick={() => openConfirm(slot)}
+                            >
+                              Prenota
+                            </button>
+                          </li>
+                        );
+                      };
+
+                      return (
+                        <div className="row g-0">
+                          <div className="col-md-6">
+                            <ul className="list-group list-group-flush">
+                              {left.map(renderItem)}
+                            </ul>
+                          </div>
+                          <div className="col-md-6">
+                            <ul className="list-group list-group-flush">
+                              {right.map(renderItem)}
+                            </ul>
+                          </div>
+                        </div>
                       );
-                    })}
-                  </ul>
+                    })()}
+                  </div>
                 </div>
               )}
 
-              {/* Sezione calendario */}
-              <div className="card mt-4">
-                <div className="card-header">
-                  Oppure, cerca per giorno specifico
-                </div>
-                <div className="row p-3">
-                  <div className="col-md-6 d-flex justify-content-center">
-                    <Calendar
-                      onChange={(date) => handleDateClick(date as Date)}
-                      value={selectedDate}
-                      minDate={new Date()}
-                    />
-                  </div>
-                  
-                  <div className="col-md-6">
-                    <h5 className="text-center">
-                      Orari per il {selectedDate.toLocaleDateString("it-IT")}
-                    </h5>
-                    <div className="d-flex flex-wrap gap-2 justify-content-center mt-3">
-                      {loadingSlots && <p>...</p>}
-                      
-                      {slotDelGiorno.length > 0 ? (
-                        slotDelGiorno.map((ora) => (
-                          <button
-                            key={ora}
-                            className="btn btn-outline-primary"
-                            onClick={() =>
-                              handleBooking({
-                                data: toYYYYMMDD(selectedDate),
-                                oraInizio: ora,
-                                medicoId: Number(selectedMedicoId),
-                              })
-                            }
-                          >
-                            {ora}
-                          </button>
-                        ))
-                      ) : (
-                        <p>Seleziona un medico per vedere gli orari.</p>
+              {/* Modal filtro data */}
+              <Modal show={showDateModal} onHide={() => setShowDateModal(false)} centered>
+                <Modal.Header closeButton>
+                  <Modal.Title>Seleziona una data</Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                  <div className="row g-3">
+                    <div className="col-12 d-flex justify-content-center">
+                      <Calendar
+                        onChange={(date) => setSelectedDateFilter(date as Date)}
+                        value={selectedDateFilter || selectedDate}
+                        minDate={new Date()}
+                        onActiveStartDateChange={({ activeStartDate }) => {
+                          if (activeStartDate) {
+                            caricaGiorniDisponibiliMese(activeStartDate);
+                          }
+                        }}
+                        tileClassName={({ date, view }) => {
+                          if (view !== 'month') return undefined;
+                          const key = toYYYYMMDD(date);
+                          if (!availableDaysSet.has(key)) return undefined;
+                          return timeFilter !== 'all' ? 'available-day available-dot' : 'available-day';
+                        }}
+                      />
+                    </div>
+                    <div className="col-md-6">
+                      <label className="form-label">Dal (opzionale)</label>
+                      <input
+                        type="date"
+                        className="form-control"
+                        value={selectedDateFilter ? toYYYYMMDD(selectedDateFilter) : ""}
+                        min={toYYYYMMDD(new Date())}
+                        onChange={(e) => setSelectedDateFilter(e.target.value ? new Date(e.target.value) : null)}
+                      />
+                    </div>
+                    <div className="col-md-6">
+                      <label className="form-label">Al (opzionale)</label>
+                      <input
+                        type="date"
+                        className="form-control"
+                        value={selectedDateToFilter ? toYYYYMMDD(selectedDateToFilter) : ""}
+                        min={toYYYYMMDD(selectedDateFilter || new Date())}
+                        onChange={(e) => setSelectedDateToFilter(e.target.value ? new Date(e.target.value) : null)}
+                      />
+                      {rangeInvalid && (
+                        <small className="text-danger">La data "Al" deve essere uguale o successiva alla data "Dal".</small>
                       )}
                     </div>
                   </div>
-                </div>
-              </div>
+                </Modal.Body>
+                <Modal.Footer>
+                  <Button variant="secondary" onClick={() => setShowDateModal(false)}>
+                    Annulla
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={applicaFiltroData}
+                    disabled={!selectedPrestazioneId || (!!selectedDateToFilter && rangeInvalid) || (!selectedDateToFilter && !selectedDateFilter)}
+                  >
+                    Applica
+                  </Button>
+                </Modal.Footer>
+              </Modal>
+
+              {/* Modal guida prenotazione */}
+              <Modal show={showHelpModal} onHide={() => setShowHelpModal(false)} centered>
+                <Modal.Header closeButton>
+                  <Modal.Title>Guida alla prenotazione</Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                  <ol className="mb-3">
+                    <li>Seleziona la <strong>specialità</strong> e poi la <strong>prestazione</strong>.</li>
+                    <li>(Opzionale) Scegli un <strong>medico</strong> specifico, oppure lascia "Tutti i medici".</li>
+                    <li>Usa <strong>Filtra per data</strong> per scegliere una <em>data</em> o un <em>intervallo</em>.
+                      I giorni in <span className="text-success">verde</span> indicano disponibilità del medico selezionato.</li>
+                    <li>Seleziona un <strong>orario</strong> (mattina/pomeriggio/fascia). Con un filtro orario attivo compare un piccolo <strong>pallino</strong> nei giorni con disponibilità.</li>
+                    <li>Tra le <strong>prime visite</strong> elencate (max 30), clicca <strong>Prenota</strong>.</li>
+                  </ol>
+                  <small className="text-muted">Suggerimento: lascia vuoto il medico per vedere più disponibilità.</small>
+                </Modal.Body>
+                <Modal.Footer>
+                  <Button variant="primary" onClick={() => setShowHelpModal(false)}>Ho capito</Button>
+                </Modal.Footer>
+              </Modal>
+
+              {/* Modal conferma prenotazione */}
+              <Modal show={showConfirmModal} onHide={() => !bookingSubmitting && setShowConfirmModal(false)} centered>
+                <Modal.Header closeButton={!bookingSubmitting}>
+                  <Modal.Title>Conferma prenotazione</Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                  {(() => {
+                    if (!pendingSlot) return null;
+                    const dataSlot = new Date(`${pendingSlot.data}T${pendingSlot.oraInizio}`);
+                    const prestazione = prestazioniList.find((p) => p.id === parseInt(selectedPrestazioneId));
+                    const costo = prestazione?.costo != null ? `${prestazione.costo}€` : "-";
+                    const tipo = prestazione?.tipoPrestazione === 'virtuale' ? 'Virtuale' : 'In presenza';
+                    return (
+                      <div className="d-flex flex-column gap-2">
+                        <div>
+                          <div className="fw-semibold">Dott. {pendingSlot.medicoNome} {pendingSlot.medicoCognome}</div>
+                          <div className="text-muted small">Medico</div>
+                        </div>
+                        <div>
+                          <div>
+                            Data e ora: <strong>{dataSlot.toLocaleDateString('it-IT', { weekday: 'long', year: 'numeric', month: '2-digit', day: '2-digit' })}</strong>
+                            <span className="badge rounded-pill text-bg-light ms-2">{pendingSlot.oraInizio.slice(0,5)}</span>
+                          </div>
+                        </div>
+                        <div>
+                          Prestazione: <strong>{prestazione?.nome ?? '—'}</strong>
+                          {prestazione && (
+                            <>
+                              <span className="ms-2 badge text-bg-secondary">{tipo}</span>
+                              <span className="ms-2 text-muted">Costo: {costo}</span>
+                            </>
+                          )}
+                        </div>
+                        <div className="alert alert-info mb-0">
+                          Confermando verrà prenotato lo slot selezionato. Potrai vedere i dettagli nella tua dashboard.
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </Modal.Body>
+                <Modal.Footer>
+                  <Button variant="secondary" onClick={() => setShowConfirmModal(false)} disabled={bookingSubmitting}>
+                    Annulla
+                  </Button>
+                  <Button variant="success" onClick={confirmBooking} disabled={bookingSubmitting || !pendingSlot}>
+                    {bookingSubmitting ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden></span>
+                        Confermo…
+                      </>
+                    ) : (
+                      'Conferma'
+                    )}
+                  </Button>
+                </Modal.Footer>
+              </Modal>
             </div>
           </div>
         </div>
       </div>
     </div>
+    </>
   );
 };
 
