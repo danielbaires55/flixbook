@@ -28,4 +28,6 @@ public interface SlotRepository extends JpaRepository<Slot, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select s from Slot s where s.medico.id = :medicoId and s.dataEOraInizio = :dataEOraInizio")
     Optional<Slot> lockByMedicoAndStart(Long medicoId, LocalDateTime dataEOraInizio);
+
+    long deleteByStatoAndDataEOraFineBefore(SlotStato stato, LocalDateTime cutoff);
 }

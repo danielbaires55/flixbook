@@ -89,7 +89,8 @@ public class SecurityConfig {
                                 "/api/pazienti/**",
                                 "/api/appuntamenti/prenota",
                                 "/api/appuntamenti/paziente/**",
-                                "/api/appuntamenti/annulla/**"
+                                "/api/appuntamenti/annulla/**",
+                                "/api/feedback/**"
                         ).hasAuthority("ROLE_PAZIENTE")
                         .anyRequest().authenticated()
                 )

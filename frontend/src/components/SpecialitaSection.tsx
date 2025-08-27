@@ -67,7 +67,7 @@ function SpecialitaSection() {
 
   return (
     <div className="specialita-section">
-      <h2 className="specialita-title">Le nostre specialità</h2>
+  <h2 className="specialita-title">Le nostre specialità</h2>
       <div className="specialties-grid">
         {specialitaList.map((specialita) => (
           <SpecialtyCard

@@ -76,7 +76,33 @@ public class BloccoOrarioService {
      * Trova tutti i blocchi orario futuri per un dato medico.
      */
     public List<BloccoOrario> findBlocchiFuturiByMedicoId(Long medicoId) {
-        return bloccoOrarioRepository.findByMedicoIdAndDataGreaterThanEqualOrderByDataAsc(medicoId, LocalDate.now());
+    List<BloccoOrario> blocchi = bloccoOrarioRepository
+        .findByMedicoIdAndDataGreaterThanEqualOrderByDataAsc(medicoId, LocalDate.now());
+
+    // Regola di visibilità: mostra solo i blocchi che hanno ancora utilità operativa
+    // - Almeno uno slot DISPONIBILE nel futuro; oppure
+    // - Almeno un appuntamento ATTIVO (CONFERMATO) nel range del blocco
+    LocalDateTime now = LocalDateTime.now();
+    return blocchi.stream().filter(blocco -> {
+        LocalDateTime inizioBlocco = LocalDateTime.of(blocco.getData(), blocco.getOraInizio());
+        LocalDateTime fineBlocco = LocalDateTime.of(blocco.getData(), blocco.getOraFine());
+
+        // 1) Se il blocco contiene appuntamenti confermati futuri o in corso, mantienilo visibile
+        long appuntamentiAttivi = appuntamentoRepository.countAppuntamentiInBlocco(
+            medicoId, inizioBlocco, fineBlocco);
+        if (appuntamentiAttivi > 0) return true;
+
+        // 2) Se esiste almeno uno slot DISPONIBILE con start nel futuro, mantieni visibile
+        List<Slot> slots = slotRepository.findByBloccoOrarioIdOrderByDataEOraInizio(blocco.getId());
+        if (slots.isEmpty()) {
+        // Fallback: per blocchi legacy senza slot persistiti, se il blocco non è ancora finito
+        // lo consideriamo ancora utile (gli slot verranno generati on-demand).
+        return fineBlocco.isAfter(now);
+        }
+        boolean haSlotFuturiDisponibili = slots.stream()
+            .anyMatch(s -> s.getStato() == SlotStato.DISPONIBILE && s.getDataEOraInizio().isAfter(now));
+        return haSlotFuturiDisponibili;
+    }).toList();
     }
 
     /**

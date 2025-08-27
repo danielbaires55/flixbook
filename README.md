@@ -178,6 +178,25 @@ npm run preview
 npm run lint
 ```
 
+## 🗄️ Import DB senza conflitti (Flyway)
+
+Se condividi un dump MySQL (schema + dati) con un collega, evita che Flyway riesegua le migrazioni `V1`/`V2` usando uno di questi profili Spring Boot:
+
+- baseline (consigliato): considera il DB già alla versione 2 e salta V1/V2
+	- avvio: `SPRING_PROFILES_ACTIVE=baseline`
+	- effetti: `flyway.baseline-on-migrate=true`, `flyway.baseline-version=2`, `ddl-auto=none`
+
+- noflyway: disabilita Flyway del tutto
+	- avvio: `SPRING_PROFILES_ACTIVE=noflyway`
+	- effetti: `flyway.enabled=false`, `ddl-auto=none`
+
+Passi tipici per il collega:
+1) Importa il dump: `mysql -u <user> -p <db> < dump.sql`
+2) Avvia backend con uno dei profili sopra (consigliato: baseline)
+3) Dopo il primo avvio, puoi tornare al profilo standard
+
+Nota: l'impostazione di default in `application.properties` abilita Flyway. Se avvii senza profili su un DB già popolato, `V2__create_slot_tables.sql` può fallire (usa i profili sopra per evitarlo).
+
 ## 🤝 Contribuire
 
 1. Fork del progetto

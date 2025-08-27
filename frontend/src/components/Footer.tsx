@@ -40,7 +40,7 @@ function Footer() {
           © 2025 FlixBook. Tutti i diritti riservati.
         </div>
         
-        <div className="footer-social-icons">
+  <div className="footer-social-icons">
           <div className="footer-social-icon"></div>
           <div className="footer-social-icon"></div>
           <div className="footer-social-icon"></div>

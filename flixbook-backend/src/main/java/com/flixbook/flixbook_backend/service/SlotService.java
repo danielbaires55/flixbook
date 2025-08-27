@@ -43,6 +43,12 @@ public class SlotService {
     @Autowired
     private AppuntamentoRepository appuntamentoRepo;
 
+    @Transactional
+    public long cleanupExpiredSlots() {
+        // Elimina solo slot DISPONIBILE con data_ora_fine < now
+        return slotRepository.deleteByStatoAndDataEOraFineBefore(SlotStato.DISPONIBILE, LocalDateTime.now());
+    }
+
     public List<LocalTime> findAvailableSlots(Long medicoId, Long prestazioneId, LocalDate data) {
         Prestazione prestazione = prestazioneRepository.findById(prestazioneId)
                 .orElseThrow(() -> new IllegalArgumentException("Prestazione non trovata."));
@@ -57,8 +63,12 @@ public class SlotService {
 
         if (!slotsDelGiorno.isEmpty()) {
             List<LocalTime> slotDisponibili = new ArrayList<>();
+            boolean isOggi = data.equals(LocalDate.now());
+            LocalTime oraAdesso = LocalTime.now();
             for (Slot s : slotsDelGiorno) {
                 if (s.getStato() != SlotStato.DISPONIBILE) continue; // rispetta DISABILITATO
+                // Escludi slot nel passato (per il giorno corrente)
+                if (isOggi && s.getDataEOraInizio().toLocalTime().isBefore(oraAdesso)) continue;
                 // Escludi slot che si sovrappongono ad appuntamenti confermati
                 boolean occupato = false;
                 for (Appuntamento app : appuntamentiEsistenti) {
@@ -90,6 +100,11 @@ public class SlotService {
             LocalTime potenzialeSlot = blocco.getOraInizio();
             LocalTime fineBlocco = blocco.getOraFine();
             while (!potenzialeSlot.plusMinutes(durata).isAfter(fineBlocco)) {
+                // Escludi slot nel passato (per il giorno corrente)
+                if (data.equals(LocalDate.now()) && potenzialeSlot.isBefore(LocalTime.now())) {
+                    potenzialeSlot = potenzialeSlot.plusMinutes(durata);
+                    continue;
+                }
                 LocalTime finePotenzialeSlot = potenzialeSlot.plusMinutes(durata);
                 boolean isOccupato = false;
                 for (Appuntamento app : appuntamentiEsistenti) {

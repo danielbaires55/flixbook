@@ -52,8 +52,15 @@ public class AppuntamentoService implements InitializingBean {
                 .orElseThrow(() -> new IllegalArgumentException("Prestazione non trovata."));
 
         LocalTime oraFine = oraInizio.plusMinutes(prestazione.getDurataMinuti());
+
+        // Guard: vieta prenotazioni nel passato o per slot già iniziati
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime startDateTime = data.atTime(oraInizio);
+        if (!startDateTime.isAfter(now)) {
+            throw new IllegalStateException("Non è possibile prenotare uno slot già iniziato o nel passato.");
+        }
         
-        long appuntamentiEsistenti = appuntamentoRepository.countAppuntamentiInBlocco(medicoId, data.atTime(oraInizio), data.atTime(oraFine));
+    long appuntamentiEsistenti = appuntamentoRepository.countAppuntamentiInBlocco(medicoId, data.atTime(oraInizio), data.atTime(oraFine));
         if (appuntamentiEsistenti > 0) {
             throw new IllegalStateException("Questo slot orario non è più disponibile.");
         }
@@ -151,6 +158,10 @@ public class AppuntamentoService implements InitializingBean {
         }
         
         appuntamento.setStato(StatoAppuntamento.ANNULLATO);
+        // Se presente uno Slot collegato, liberalo rimettendolo DISPONIBILE
+        if (appuntamento.getSlot() != null) {
+            appuntamento.getSlot().setStato(SlotStato.DISPONIBILE);
+        }
         appuntamentoRepository.save(appuntamento);
 
         Paziente paziente = appuntamento.getPaziente();

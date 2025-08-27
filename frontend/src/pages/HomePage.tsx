@@ -12,13 +12,14 @@ export default function HomePage() {
   const mediciRef = useRef<HTMLDivElement>(null);
   const contattiRef = useRef<HTMLDivElement>(null); // Lo attaccheremo al Footer
 
+
   // La tua funzione per scorrere (corretta)
   const scrollToSection = (ref: React.RefObject<HTMLDivElement | null>) => {
     ref.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   return (
-    <div className="homepage-container">
+  <div className="homepage-container">
       {/* 1. Passiamo le funzioni alla NavBar come props */}
       <NavBar
         onSpecialitaClick={() => scrollToSection(specialitaRef)}

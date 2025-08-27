@@ -70,7 +70,7 @@ function MediciSection() {
 
   return (
     <div className="medici-section">
-      <h2 className="medici-title">I nostri medici</h2>
+  <h2 className="medici-title">I nostri medici</h2>
       <div className="doctors-grid">
         {/* 5. Mappiamo la lista di medici (reale) per creare le card */}
         {medici.map((medico) => (

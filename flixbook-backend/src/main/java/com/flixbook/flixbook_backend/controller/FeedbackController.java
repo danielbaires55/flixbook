@@ -2,6 +2,8 @@ package com.flixbook.flixbook_backend.controller;
 
 import com.flixbook.flixbook_backend.model.Feedback;
 import com.flixbook.flixbook_backend.service.FeedbackService;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,8 +25,12 @@ public class FeedbackController {
     @PostMapping("/submit")
     public ResponseEntity<?> submitFeedback(@RequestBody FeedbackRequest request) {
         try {
-            Feedback newFeedback = feedbackService.submitFeedback(request.appuntamentoId, request.valutazione, request.commento);
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            String pazienteEmail = authentication.getName();
+            Feedback newFeedback = feedbackService.submitFeedback(pazienteEmail, request.appuntamentoId, request.valutazione, request.commento);
             return new ResponseEntity<>(newFeedback, HttpStatus.CREATED);
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         } catch (Exception e) {
