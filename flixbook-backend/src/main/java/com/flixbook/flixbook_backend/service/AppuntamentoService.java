@@ -23,6 +23,10 @@ import java.util.UUID;
 @Transactional
 public class AppuntamentoService implements InitializingBean {
 
+    private static final String INDIRIZZO_STUDIO = "Via del Benessere, 10 - 20121 Milano (MI)";
+    // Versione breve per SMS
+    private static final String INDIRIZZO_STUDIO_SHORT = "Via del Benessere 10, Milano";
+
     @Autowired
     private AppuntamentoRepository appuntamentoRepository;
     @Autowired
@@ -160,9 +164,10 @@ public class AppuntamentoService implements InitializingBean {
         }
 
         appuntamento.setStato(StatoAppuntamento.ANNULLATO);
-        // Se legato a uno slot persistito, rimettilo DISPONIBILE
+        // Se legato a uno slot persistito, rimettilo DISPONIBILE e stacca il riferimento
         if (appuntamento.getSlot() != null) {
             appuntamento.getSlot().setStato(SlotStato.DISPONIBILE);
+            appuntamento.setSlot(null);
         }
         appuntamentoRepository.save(appuntamento);
     }
@@ -182,9 +187,10 @@ public class AppuntamentoService implements InitializingBean {
         }
         
         appuntamento.setStato(StatoAppuntamento.ANNULLATO);
-        // Se presente uno Slot collegato, liberalo rimettendolo DISPONIBILE
+        // Se presente uno Slot collegato, liberalo rimettendolo DISPONIBILE e stacca il riferimento
         if (appuntamento.getSlot() != null) {
             appuntamento.getSlot().setStato(SlotStato.DISPONIBILE);
+            appuntamento.setSlot(null);
         }
         appuntamentoRepository.save(appuntamento);
 
@@ -251,11 +257,20 @@ public class AppuntamentoService implements InitializingBean {
             
             if (!app.isReminderInviato()) {
                 String oggetto = "Promemoria appuntamento: " + prestazione.getNome();
-                String corpo = String.format(
-                    "Gentile %s,\n\nLe ricordiamo il suo appuntamento di domani:\n\n- Medico: Dr. %s %s\n- Prestazione: %s\n- Ora: %s\n\nCordiali saluti,\nIl team di Flixbook",
+                StringBuilder corpoBuilder = new StringBuilder(String.format(
+                    "Gentile %s,\n\nLe ricordiamo il suo appuntamento di domani:\n\n- Medico: Dr. %s %s\n- Prestazione: %s\n- Ora: %s\n",
                     paziente.getNome(), medico.getNome(), medico.getCognome(),
                     prestazione.getNome(), app.getDataEOraInizio().toLocalTime().toString()
-                );
+                ));
+                if (app.getTipoAppuntamento() == TipoAppuntamento.virtuale && app.getLinkVideocall() != null) {
+                    corpoBuilder.append("- Videocall: ").append(app.getLinkVideocall()).append("\n\n");
+                } else if (app.getTipoAppuntamento() == TipoAppuntamento.fisico) {
+                    corpoBuilder.append("- Indirizzo: ").append(INDIRIZZO_STUDIO).append("\n\n");
+                } else {
+                    corpoBuilder.append("\n");
+                }
+                corpoBuilder.append("Cordiali saluti,\nIl team di Flixbook");
+                String corpo = corpoBuilder.toString();
                 emailService.sendEmail(paziente.getEmail(), oggetto, corpo);
                 app.setReminderInviato(true);
             }
@@ -263,12 +278,18 @@ public class AppuntamentoService implements InitializingBean {
             if (!app.isSmsReminderInviato()) {
                 String numeroTelefono = paziente.getTelefono();
                 if (numeroTelefono != null && !numeroTelefono.trim().isEmpty()) {
-                    String corpoSms = String.format(
-                        "Promemoria appuntamento Flixbook domani con Dr. %s %s alle %s.",
+                    StringBuilder corpoSmsBuilder = new StringBuilder(String.format(
+                        "Promemoria Flixbook: domani ore %s - Dr. %s - %s.",
+                        app.getDataEOraInizio().toLocalTime().toString(),
                         medico.getCognome(),
-                        prestazione.getNome(),
-                        app.getDataEOraInizio().toLocalTime().toString()
-                    );
+                        prestazione.getNome()
+                    ));
+                    if (app.getTipoAppuntamento() == TipoAppuntamento.virtuale && app.getLinkVideocall() != null) {
+                        corpoSmsBuilder.append(" VC: ").append(app.getLinkVideocall());
+                    } else if (app.getTipoAppuntamento() == TipoAppuntamento.fisico) {
+                        corpoSmsBuilder.append(" Ind: ").append(INDIRIZZO_STUDIO_SHORT);
+                    }
+                    String corpoSms = corpoSmsBuilder.toString();
                     smsService.sendSms(numeroTelefono, corpoSms);
                     app.setSmsReminderInviato(true);
                 }
@@ -310,18 +331,26 @@ public class AppuntamentoService implements InitializingBean {
         );
         if (appuntamento.getTipoAppuntamento() == TipoAppuntamento.virtuale) {
             corpo += "Link per la videocall:\n" + appuntamento.getLinkVideocall() + "\n\n";
+        } else if (appuntamento.getTipoAppuntamento() == TipoAppuntamento.fisico) {
+            corpo += "Presentarsi in: " + INDIRIZZO_STUDIO + "\n\n";
         }
         corpo += "Cordiali saluti,\nIl team di Flixbook";
         emailService.sendEmail(paziente.getEmail(), oggetto, corpo);
 
         String numeroTelefono = paziente.getTelefono();
         if (numeroTelefono != null && !numeroTelefono.trim().isEmpty()) {
-            String dettagliSms = String.format(
-                "Dr. %s %s, %s, Data: %s, Ora: %s.",
+            StringBuilder dettagliSmsBuilder = new StringBuilder(String.format(
+                "Dr. %s %s, %s, %s alle %s.",
                 medico.getNome(), medico.getCognome(), prestazione.getNome(),
                 appuntamento.getDataEOraInizio().toLocalDate().toString(),
                 appuntamento.getDataEOraInizio().toLocalTime().toString()
-            );
+            ));
+            if (appuntamento.getTipoAppuntamento() == TipoAppuntamento.virtuale && appuntamento.getLinkVideocall() != null) {
+                dettagliSmsBuilder.append(" VC: ").append(appuntamento.getLinkVideocall());
+            } else if (appuntamento.getTipoAppuntamento() == TipoAppuntamento.fisico) {
+                dettagliSmsBuilder.append(" Ind: ").append(INDIRIZZO_STUDIO_SHORT);
+            }
+            String dettagliSms = dettagliSmsBuilder.toString();
             smsService.sendConfirmationSms(numeroTelefono, dettagliSms);
         }
     }

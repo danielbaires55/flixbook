@@ -36,3 +36,43 @@
   font-weight: 700;
   border: 2px solid #e9ecef;
 }
+
+/* Blocco Orario expandable card */
+.bo-card {
+  border: 1px solid #e9ecef;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.bo-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #f8f9fa;
+  border: 0;
+  text-align: left;
+  font-weight: 600;
+}
+.bo-header:hover {
+  background: #f1f3f5;
+}
+.bo-title {
+  font-size: 0.95rem;
+}
+.bo-chevron {
+  display: inline-flex;
+  transition: transform .2s ease;
+}
+.bo-chevron.open {
+  transform: rotate(180deg);
+}
+.bo-body {
+  padding: 12px;
+  background: #fff;
+  border-top: 1px solid #e9ecef;
+}
+.bo-slots .list-group-item {
+  padding-top: .5rem;
+  padding-bottom: .5rem;
+}

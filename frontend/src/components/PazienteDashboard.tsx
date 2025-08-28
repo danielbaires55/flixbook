@@ -160,6 +160,9 @@ const PazienteDashboard = () => {
                             Vai alla Videocall
                           </a>
                         )}
+                        {app.tipoAppuntamento === "fisico" && app.stato === "CONFERMATO" && (
+                          <span className="badge text-bg-light align-self-center">Indirizzo: Via del Benessere, 10 - 20121 Milano</span>
+                        )}
                         {app.stato === "CONFERMATO" && (
                           <button className="btn btn-danger btn-sm" onClick={() => handleAnnulla(app.id)}>
                             Annulla

@@ -29,8 +29,7 @@ public class MedicoController {
     @Autowired
     private MedicoService medicoService;
 
-    @Autowired
-    private org.springframework.security.core.userdetails.UserDetailsService userDetailsService;
+    // Removed unused userDetailsService; we now rely on the Authentication principal
 
     // =======================================================================
     // == METODO /profile AGGIORNATO E CORRETTO                           ==
@@ -74,10 +73,17 @@ public class MedicoController {
     }
     
    @PutMapping("/profilo")
-    public ResponseEntity<Medico> updateProfilo(@RequestBody Map<String, String> datiProfilo, Authentication authentication) {
-        CustomUserDetails userDetails = (CustomUserDetails) userDetailsService.loadUserByUsername(authentication.getName());
+    public ResponseEntity<?> updateProfilo(@RequestBody Map<String, String> datiProfilo, Authentication authentication) {
+        Object principal = authentication.getPrincipal();
+        if (!(principal instanceof CustomUserDetails)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        CustomUserDetails userDetails = (CustomUserDetails) principal;
+        String role = userDetails.getAuthorities().iterator().next().getAuthority();
+        if (!"ROLE_MEDICO".equals(role)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Solo il medico può aggiornare il profilo del medico.");
+        }
         Long medicoId = userDetails.getMedicoId();
-        
         Medico medicoAggiornato = medicoService.updateProfilo(medicoId, datiProfilo);
         return ResponseEntity.ok(medicoAggiornato);
     }
@@ -85,9 +91,17 @@ public class MedicoController {
     @PutMapping("/profilo/password")
     public ResponseEntity<?> changePassword(@RequestBody Map<String, String> passwordData, Authentication authentication) {
         try {
-            CustomUserDetails userDetails = (CustomUserDetails) userDetailsService.loadUserByUsername(authentication.getName());
+            Object principal = authentication.getPrincipal();
+            if (!(principal instanceof CustomUserDetails)) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            }
+            CustomUserDetails userDetails = (CustomUserDetails) principal;
+            // Consentito solo se è un medico vero (non un collaboratore)
+            String role = userDetails.getAuthorities().iterator().next().getAuthority();
+            if (!"ROLE_MEDICO".equals(role)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Solo il medico può cambiare la propria password.");
+            }
             Long medicoId = userDetails.getMedicoId();
-            
             medicoService.changePassword(medicoId, passwordData);
             return ResponseEntity.ok("Password aggiornata con successo.");
         } catch (Exception e) {
@@ -96,10 +110,17 @@ public class MedicoController {
     }
 
     @PostMapping("/profilo/immagine")
-    public ResponseEntity<Medico> updateImmagineProfilo(@RequestParam("file") MultipartFile file, Authentication authentication) {
-        CustomUserDetails userDetails = (CustomUserDetails) userDetailsService.loadUserByUsername(authentication.getName());
+    public ResponseEntity<?> updateImmagineProfilo(@RequestParam("file") MultipartFile file, Authentication authentication) {
+        Object principal = authentication.getPrincipal();
+        if (!(principal instanceof CustomUserDetails)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        CustomUserDetails userDetails = (CustomUserDetails) principal;
+        String role = userDetails.getAuthorities().iterator().next().getAuthority();
+        if (!"ROLE_MEDICO".equals(role)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Solo il medico può aggiornare la propria immagine profilo.");
+        }
         Long medicoId = userDetails.getMedicoId();
-
         Medico medicoAggiornato = medicoService.updateImmagineProfilo(medicoId, file);
         return ResponseEntity.ok(medicoAggiornato);
     }

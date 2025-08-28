@@ -41,6 +41,9 @@ public interface AppuntamentoRepository extends JpaRepository<Appuntamento, Long
            "WHERE a.stato = :stato AND a.feedbackInviato = false")
     List<Appuntamento> findByStatoAndFeedbackInviatoIsFalse(@Param("stato") StatoAppuntamento stato);
 
+       // Recupera appuntamenti collegati a una lista di Slot
+       List<Appuntamento> findBySlot_IdIn(List<Long> slotIds);
+
     /**
      * QUESTO È IL METODO CHE MANCAVA E CHE CAUSAVA L'ERRORE.
      * Trova gli appuntamenti ATTIVI (confermati) di un medico in un dato intervallo di tempo.

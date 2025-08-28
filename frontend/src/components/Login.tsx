@@ -45,8 +45,8 @@ const Login: FC<LoginProps> = () => { // Rimosso onRegistratiClick dalle props
                 }
             }
         } catch (err) {
-            console.error("Errore di login:", err);
-            setError('Email o password non valide.');
+            console.error('Errore di login:', err);
+            setError('Credenziali non valide.');
         }
     };
 
@@ -66,7 +66,7 @@ const Login: FC<LoginProps> = () => { // Rimosso onRegistratiClick dalle props
                             type="email"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            placeholder="Inserire email"
+                            placeholder="Inserisci email"
                             className="form-input"
                             required
                         />
@@ -80,7 +80,7 @@ const Login: FC<LoginProps> = () => { // Rimosso onRegistratiClick dalle props
                             type="password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            placeholder="Inserire password"
+                            placeholder="Inserisci password"
                             className="form-input"
                             required
                         />
@@ -93,8 +93,12 @@ const Login: FC<LoginProps> = () => { // Rimosso onRegistratiClick dalle props
                     </button>
                 </form>
 
+                <div className="mt-3 text-center">
+                    <Link to="/forgot-password" className="text-decoration-none">Hai dimenticato la password?</Link>
+                </div>
+
                 <div className="registration-link">
-                    <span className="registration-text">Non hai ancora un account? </span>
+                    <span className="registration-text">Non hai un account? </span>
                     <Link to="/register" className="registration-btn">
                         Registrati
                     </Link>

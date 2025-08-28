@@ -22,4 +22,13 @@ public interface MedicoRepository extends JpaRepository<Medico, Long> {
 // MedicoRepository.java
 @Query("SELECT m FROM Medico m JOIN MedicoPrestazione mp ON m.id = mp.medicoId WHERE mp.prestazioneId = :prestazioneId")
 List<Medico> findMediciByPrestazioneId(@Param("prestazioneId") Long prestazioneId);
+
+  @Query("""
+    SELECT DISTINCT s.nome FROM Specialita s
+    JOIN Prestazione p ON p.specialita.id = s.id
+    JOIN MedicoPrestazione mp ON mp.prestazioneId = p.id
+    WHERE mp.medicoId = :medicoId
+    ORDER BY s.nome ASC
+  """)
+  List<String> findSpecialitaNomiByMedicoId(@Param("medicoId") Long medicoId);
 }

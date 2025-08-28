@@ -3,7 +3,6 @@ package com.flixbook.flixbook_backend.controller;
 import com.flixbook.flixbook_backend.config.CustomUserDetails;
 import com.flixbook.flixbook_backend.model.BloccoOrario;
 import com.flixbook.flixbook_backend.service.BloccoOrarioService;
-import com.flixbook.flixbook_backend.service.CustomUserDetailsService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,13 +21,11 @@ public class BloccoOrarioController {
     @Autowired
     private BloccoOrarioService bloccoOrarioService;
 
-    @Autowired
-    private CustomUserDetailsService userDetailsService;
 
     @PostMapping("/create")
     public ResponseEntity<?> createBloccoOrario(@RequestBody Map<String, String> payload, Authentication authentication) {
         try {
-            CustomUserDetails userDetails = (CustomUserDetails) userDetailsService.loadUserByUsername(authentication.getName());
+            CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
             Long medicoId = userDetails.getMedicoId();
 
             // Estraiamo i dati direttamente dalla Map, senza DTO
@@ -36,13 +33,24 @@ public class BloccoOrarioController {
             String oraInizio = payload.get("oraInizio");
             String oraFine = payload.get("oraFine");
 
-            BloccoOrario bloccoCreato = bloccoOrarioService.createBloccoOrario(
-                    medicoId,
-                    data,
-                    oraInizio,
-                    oraFine
-            );
+        String role = userDetails.getAuthorities().iterator().next().getAuthority();
+        String createdByType = "ROLE_COLLABORATORE".equals(role) ? "COLLABORATORE" : "MEDICO";
+        Long createdById = userDetails.getUserId();
+        String createdByName = userDetails.getUsername();
+
+        BloccoOrario bloccoCreato = bloccoOrarioService.createBloccoOrario(
+            medicoId,
+            data,
+            oraInizio,
+            oraFine,
+            createdByType,
+            createdById,
+            createdByName
+        );
             return new ResponseEntity<>(bloccoCreato, HttpStatus.CREATED);
+        } catch (IllegalStateException ise) {
+            // Conflitto logico (es. sovrapposizione blocchi)
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(ise.getMessage());
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
@@ -50,7 +58,7 @@ public class BloccoOrarioController {
 
     @GetMapping("/medico/{medicoId}")
     public ResponseEntity<List<BloccoOrario>> getBlocchiByMedico(@PathVariable Long medicoId, Authentication authentication) {
-        CustomUserDetails userDetails = (CustomUserDetails) userDetailsService.loadUserByUsername(authentication.getName());
+    CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
 
         if (!Objects.equals(userDetails.getMedicoId(), medicoId)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
@@ -63,7 +71,7 @@ public class BloccoOrarioController {
     @DeleteMapping("/{bloccoId}")
     public ResponseEntity<?> deleteBlocco(@PathVariable Long bloccoId, Authentication authentication) {
         try {
-            CustomUserDetails userDetails = (CustomUserDetails) userDetailsService.loadUserByUsername(authentication.getName());
+            CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
             Long medicoId = userDetails.getMedicoId();
 
             bloccoOrarioService.deleteBloccoOrario(bloccoId, medicoId);

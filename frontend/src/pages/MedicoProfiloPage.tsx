@@ -33,7 +33,7 @@ const MedicoProfiloPage: FC = () => {
     const closeInfo = () => { setInfoModal((p) => ({ ...p, show: false })); infoModal.onClose?.(); };
 
     useEffect(() => {
-        if (user) {
+    if (user) {
             const headers = { Authorization: `Bearer ${user.token}` };
             axios.get<MedicoProfile>(`${API_BASE_URL}/medici/profile`, { headers })
                 .then(response => {
@@ -58,8 +58,13 @@ const MedicoProfiloPage: FC = () => {
     const handleProfileSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!user) return;
-    // azzera eventuali modali pendenti
-    if (infoModal.show) closeInfo();
+        // Se collaboratore, non è permesso modificare il profilo del medico
+        if (user.role === 'ROLE_COLLABORATORE') {
+            openInfo('Azione non consentita', 'Solo il medico titolare può modificare questo profilo.', 'danger');
+            return;
+        }
+        // azzera eventuali modali pendenti
+        if (infoModal.show) closeInfo();
         setSavingProfile(true);
         try {
             const headers = { Authorization: `Bearer ${user.token}` };
@@ -75,11 +80,11 @@ const MedicoProfiloPage: FC = () => {
                 await axios.post(`${API_BASE_URL}/medici/profilo/immagine`, fileUploadData, { headers });
             }
 
-            openInfo('Operazione riuscita', 'Profilo aggiornato con successo! La pagina verrà ricaricata per mostrare le modifiche.', 'success');
+            openInfo('Fatto', 'Profilo aggiornato. La pagina si ricaricherà per mostrare le modifiche.', 'success');
             setTimeout(() => window.location.reload(), 2000);
 
         } catch {
-            openInfo('Errore', "Errore nell'aggiornamento del profilo.", 'danger');
+            openInfo('Errore', 'Non è stato possibile aggiornare il profilo.', 'danger');
         }
         finally {
             setSavingProfile(false);
@@ -92,23 +97,26 @@ const MedicoProfiloPage: FC = () => {
     if (infoModal.show) closeInfo();
 
         if (passwordData.nuovaPassword !== passwordData.confermaPassword) {
-            openInfo('Errore', 'Le nuove password non corrispondono.', 'danger');
+            openInfo('Errore', 'Le due password non coincidono.', 'danger');
             return;
         }
 
         try {
             const headers = { Authorization: `Bearer ${user.token}` };
             const payload = { vecchiaPassword: passwordData.vecchiaPassword, nuovaPassword: passwordData.nuovaPassword };
-            await axios.put(`${API_BASE_URL}/medici/profilo/password`, payload, { headers });
-            openInfo('Operazione riuscita', 'Password aggiornata con successo!', 'success');
+            const endpoint = user.role === 'ROLE_COLLABORATORE'
+                ? `${API_BASE_URL}/collaboratori/profilo/password`
+                : `${API_BASE_URL}/medici/profilo/password`;
+            await axios.put(endpoint, payload, { headers });
+            openInfo('Fatto', 'Password aggiornata.', 'success');
             setPasswordData({ vecchiaPassword: '', nuovaPassword: '', confermaPassword: '' });
             setShowPasswords(false);
             setShowPwdSection(false);
         } catch (err: unknown) {
             if (axios.isAxiosError(err) && err.response) {
-                openInfo('Errore', err.response.data || "Errore nell'aggiornamento della password. Controlla che la vecchia password sia corretta.", 'danger');
+                openInfo('Errore', err.response.data || 'Impossibile aggiornare la password. Controlla la password attuale.', 'danger');
             } else {
-                openInfo('Errore', "Errore nell'aggiornamento della password. Controlla che la vecchia password sia corretta.", 'danger');
+                openInfo('Errore', 'Impossibile aggiornare la password. Controlla la password attuale.', 'danger');
             }
         }
     };
@@ -123,7 +131,7 @@ const MedicoProfiloPage: FC = () => {
                 <div className="col-lg-7">
                     <div className="card shadow-sm h-100">
                         <div className="card-body p-4">
-                            <h3 className="card-title text-center mb-4">Modifica Profilo</h3>
+                            <h3 className="card-title text-center mb-4">Modifica profilo</h3>
                             <form onSubmit={handleProfileSubmit}>
                                 <div className="row">
                                     <div className="col-md-4 text-center">
@@ -133,19 +141,20 @@ const MedicoProfiloPage: FC = () => {
                                             className="rounded-circle mb-3"
                                             style={{ width: '150px', height: '150px', objectFit: 'cover' }}
                                         />
-                                        <label htmlFor="immagineProfilo" className="form-label">Cambia immagine</label>
+                                        <label htmlFor="immagineProfilo" className="form-label">Cambia foto</label>
                                         <input 
                                             className="form-control form-control-sm" 
                                             type="file" 
                                             id="immagineProfilo" 
                                             onChange={handleFileChange} 
                                             accept="image/png, image/jpeg" 
+                                            disabled={user?.role === 'ROLE_COLLABORATORE'}
                                         />
                                     </div>
                                     <div className="col-md-8">
-                                        <div className="mb-3"><label className="form-label">Nome</label><input type="text" className="form-control" value={formData.nome} onChange={e => setFormData({...formData, nome: e.target.value})} /></div>
-                                        <div className="mb-3"><label className="form-label">Cognome</label><input type="text" className="form-control" value={formData.cognome} onChange={e => setFormData({...formData, cognome: e.target.value})} /></div>
-                                        <div className="mb-3"><label className="form-label">Telefono</label><input type="tel" className="form-control" value={formData.telefono} onChange={e => setFormData({...formData, telefono: e.target.value})} /></div>
+                                        <div className="mb-3"><label className="form-label">Nome</label><input type="text" className="form-control" value={formData.nome} onChange={e => setFormData({...formData, nome: e.target.value})} disabled={user?.role === 'ROLE_COLLABORATORE'} /></div>
+                                        <div className="mb-3"><label className="form-label">Cognome</label><input type="text" className="form-control" value={formData.cognome} onChange={e => setFormData({...formData, cognome: e.target.value})} disabled={user?.role === 'ROLE_COLLABORATORE'} /></div>
+                                        <div className="mb-3"><label className="form-label">Telefono</label><input type="tel" className="form-control" value={formData.telefono} onChange={e => setFormData({...formData, telefono: e.target.value})} disabled={user?.role === 'ROLE_COLLABORATORE'} /></div>
                                     </div>
                                 </div>
                                 <div className="mb-3 mt-3">
@@ -155,11 +164,12 @@ const MedicoProfiloPage: FC = () => {
                                         rows={4}
                                         value={formData.biografia}
                                         onChange={e => setFormData({ ...formData, biografia: e.target.value })}
+                                        disabled={user?.role === 'ROLE_COLLABORATORE'}
                                         aria-label="Biografia del medico"
                                     />
                                 </div>
                                 <div className="d-flex justify-content-center">
-                                    <button type="submit" className="btn btn-primary px-4 d-inline-flex align-items-center" aria-label="Salva dati profilo" disabled={savingProfile}>
+                                    <button type="submit" className="btn btn-primary px-4 d-inline-flex align-items-center" aria-label="Salva dati profilo" disabled={savingProfile || user?.role === 'ROLE_COLLABORATORE'}>
                                         {savingProfile ? (
                                             <>
                                                 <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
@@ -173,7 +183,7 @@ const MedicoProfiloPage: FC = () => {
                                                     <path d="M10 2.5v2H3v-2z"/>
                                                     <path d="M4 10a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v3H4z"/>
                                                 </svg>
-                                                Salva Dati Profilo
+                                                Salva modifiche
                                             </>
                                         )}
                                     </button>
@@ -190,7 +200,7 @@ const MedicoProfiloPage: FC = () => {
                             <div className="d-flex justify-content-between align-items-center">
                                 <div>
                                     <h5 className="card-title mb-0">Sicurezza</h5>
-                                    <small className="text-muted">Modifica la password del tuo account</small>
+                                    <small className="text-muted">Gestisci la password del tuo account</small>
                                 </div>
                                 <button
                                     type="button"
@@ -207,11 +217,11 @@ const MedicoProfiloPage: FC = () => {
                                 </button>
                             </div>
 
-                            <Collapse in={showPwdSection}>
+                <Collapse in={showPwdSection}>
                                 <div id="pwd-collapse">
-                                    <form onSubmit={handlePasswordSubmit} className="mt-3">
+                    <form onSubmit={handlePasswordSubmit} className="mt-3">
                                         <div className="mb-2">
-                                            <label className="form-label small">Vecchia Password</label>
+                                            <label className="form-label small">Password attuale</label>
                                             <input
                                                 type={showPasswords ? 'text' : 'password'}
                                                 required className="form-control form-control-sm"
@@ -221,7 +231,7 @@ const MedicoProfiloPage: FC = () => {
                                             />
                                         </div>
                                         <div className="mb-2">
-                                            <label className="form-label small">Nuova Password</label>
+                                            <label className="form-label small">Nuova password</label>
                                             <input
                                                 type={showPasswords ? 'text' : 'password'}
                                                 required className="form-control form-control-sm"
@@ -231,7 +241,7 @@ const MedicoProfiloPage: FC = () => {
                                             />
                                         </div>
                                         <div className="mb-2">
-                                            <label className="form-label small">Conferma Nuova Password</label>
+                                            <label className="form-label small">Conferma nuova password</label>
                                             <input
                                                 type={showPasswords ? 'text' : 'password'}
                                                 required className="form-control form-control-sm"
@@ -245,9 +255,9 @@ const MedicoProfiloPage: FC = () => {
                                                 <input id="toggleShowPwd" className="form-check-input" type="checkbox" checked={showPasswords} onChange={(e) => setShowPasswords(e.target.checked)} />
                                                 <label className="form-check-label small" htmlFor="toggleShowPwd">Mostra password</label>
                                             </div>
-                                            <small className="text-muted">Suggerimento: usa almeno 8 caratteri, lettere e numeri.</small>
+                                            <small className="text-muted">Suggerimento: usa almeno 8 caratteri con lettere e numeri.</small>
                                         </div>
-                                        <button type="submit" className="btn btn-secondary btn-sm w-100">Aggiorna Password</button>
+                                        <button type="submit" className="btn btn-secondary btn-sm w-100">Aggiorna password</button>
                                     </form>
                                 </div>
                             </Collapse>
@@ -258,7 +268,7 @@ const MedicoProfiloPage: FC = () => {
             {/* Modale informativo */}
             <Modal show={infoModal.show} onHide={closeInfo} centered>
                 <Modal.Header closeButton>
-                    <Modal.Title>{infoModal.title || 'Informazione'}</Modal.Title>
+                    <Modal.Title>{infoModal.title || 'Messaggio'}</Modal.Title>
                 </Modal.Header>
                 <Modal.Body>{infoModal.message}</Modal.Body>
                 <Modal.Footer>

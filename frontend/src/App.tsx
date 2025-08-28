@@ -5,6 +5,8 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 // Componenti
 import BookingCalendar from "./components/BookingCalendar";
 import Login from "./components/Login";
+import ForgotPassword from "./components/ForgotPassword";
+import ResetPassword from "./components/ResetPassword";
 import MedicoDashboard from "./components/MedicoDashboard";
 import PazienteDashboard from "./components/PazienteDashboard";
 import FeedbackForm from "./components/FeedbackForm";
@@ -43,6 +45,8 @@ function App() {
         {/* Rotte pubbliche */}
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<Login />} />
+  <Route path="/forgot-password" element={<ForgotPassword />} />
+  <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/book" element={<BookingCalendar />} />
         <Route path="/register" element={<PazienteRegistrationForm />} />
 

@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.Data;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "blocco_orario")
@@ -26,4 +27,17 @@ public class BloccoOrario {
 
     @Column(name = "ora_fine", nullable = false)
     private LocalTime oraFine;
+
+    // Attribuzione di chi ha creato il blocco
+    @Column(name = "created_by_type")
+    private String createdByType; // "MEDICO" | "COLLABORATORE"
+
+    @Column(name = "created_by_id")
+    private Long createdById;
+
+    @Column(name = "created_by_name")
+    private String createdByName; // Nome completo dell'inseritore
+
+    @Column(name = "created_at")
+    private LocalDateTime createdAt;
 }

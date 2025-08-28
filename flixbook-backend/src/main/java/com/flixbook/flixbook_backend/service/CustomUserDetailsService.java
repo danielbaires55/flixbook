@@ -5,6 +5,7 @@ import com.flixbook.flixbook_backend.model.Collaboratore;
 import com.flixbook.flixbook_backend.model.Medico;
 import com.flixbook.flixbook_backend.model.Paziente;
 import com.flixbook.flixbook_backend.repository.CollaboratoreRepository;
+import org.springframework.jdbc.core.JdbcTemplate;
 import com.flixbook.flixbook_backend.repository.MedicoRepository;
 import com.flixbook.flixbook_backend.repository.PazienteRepository;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -20,11 +21,13 @@ public class CustomUserDetailsService implements UserDetailsService {
     private final MedicoRepository medicoRepository;
     private final PazienteRepository pazienteRepository;
     private final CollaboratoreRepository collaboratoreRepository;
+    private final JdbcTemplate jdbcTemplate;
 
-    public CustomUserDetailsService(MedicoRepository medicoRepository, PazienteRepository pazienteRepository, CollaboratoreRepository collaboratoreRepository) {
+    public CustomUserDetailsService(MedicoRepository medicoRepository, PazienteRepository pazienteRepository, CollaboratoreRepository collaboratoreRepository, JdbcTemplate jdbcTemplate) {
         this.medicoRepository = medicoRepository;
         this.pazienteRepository = pazienteRepository;
         this.collaboratoreRepository = collaboratoreRepository;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @Override
@@ -38,7 +41,9 @@ public class CustomUserDetailsService implements UserDetailsService {
                 medico.getPasswordHash(),
                 Collections.singletonList(new SimpleGrantedAuthority("ROLE_MEDICO")),
                 medico.getId(),
-                medico.getId() // Per un medico, medicoId è il suo stesso ID
+                medico.getId(),
+                Collections.singletonList(medico.getId()),
+                medico.getId()
             );
         }
 
@@ -51,7 +56,9 @@ public class CustomUserDetailsService implements UserDetailsService {
                 paziente.getPasswordHash(),
                 Collections.singletonList(new SimpleGrantedAuthority("ROLE_PAZIENTE")),
                 paziente.getId(),
-                null // Un paziente non ha un medicoId di riferimento
+                null,
+                Collections.emptyList(),
+                null
             );
         }
 
@@ -59,12 +66,21 @@ public class CustomUserDetailsService implements UserDetailsService {
         Collaboratore collaboratore = collaboratoreRepository.findByEmail(email).orElse(null);
         if (collaboratore != null) {
             // Restituisce il nostro oggetto personalizzato
+            // Legge i medici gestiti dal collaboratore dalla join table (se vuota, fallback al legacy)
+            var managed = jdbcTemplate.query("SELECT medico_id FROM collaboratori_medici WHERE collaboratore_id = ?",
+                    (rs, rowNum) -> rs.getLong(1), collaboratore.getId());
+            if (managed == null || managed.isEmpty()) {
+                managed = Collections.singletonList(collaboratore.getMedico().getId());
+            }
+            Long acting = managed.get(0);
             return new CustomUserDetails(
                 collaboratore.getEmail(),
                 collaboratore.getPasswordHash(),
                 Collections.singletonList(new SimpleGrantedAuthority("ROLE_COLLABORATORE")),
                 collaboratore.getId(),
-                collaboratore.getMedico().getId() // Prende l'ID del medico associato
+                acting, // compat: medicoId come medico attivo
+                managed,
+                acting
             );
         }
 

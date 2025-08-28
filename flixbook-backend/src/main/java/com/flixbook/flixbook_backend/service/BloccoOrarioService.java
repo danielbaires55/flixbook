@@ -1,6 +1,8 @@
 package com.flixbook.flixbook_backend.service;
 
 import com.flixbook.flixbook_backend.model.BloccoOrario;
+import com.flixbook.flixbook_backend.model.Appuntamento;
+import com.flixbook.flixbook_backend.model.StatoAppuntamento;
 import com.flixbook.flixbook_backend.model.Medico;
 import com.flixbook.flixbook_backend.repository.AppuntamentoRepository;
 import com.flixbook.flixbook_backend.repository.SlotRepository;
@@ -35,19 +37,42 @@ public class BloccoOrarioService {
     private SlotRepository slotRepository;
 
     /**
-     * Crea un nuovo blocco orario per un medico.
+     * Crea un nuovo blocco orario per un medico, persistendo anche i metadati di creazione.
      */
-    public BloccoOrario createBloccoOrario(Long medicoId, LocalDate data, String oraInizio, String oraFine) {
+    public BloccoOrario createBloccoOrario(Long medicoId,
+                                           LocalDate data,
+                                           String oraInizio,
+                                           String oraFine,
+                                           String createdByType,
+                                           Long createdById,
+                                           String createdByName) {
         Medico medico = medicoRepository.findById(medicoId)
                 .orElseThrow(() -> new IllegalArgumentException("Medico non trovato con ID: " + medicoId));
 
-        // Aggiungi qui eventuali controlli, es. per non creare blocchi sovrapposti.
+        // Evita la creazione di blocchi sovrapposti nello stesso giorno per lo stesso medico
+        List<BloccoOrario> esistenti = bloccoOrarioRepository.findByMedicoIdAndData(medicoId, data);
+        LocalTime newStart = LocalTime.parse(oraInizio);
+        LocalTime newEnd = LocalTime.parse(oraFine);
+        boolean overlaps = esistenti.stream().anyMatch(b -> {
+            LocalTime existingStart = b.getOraInizio();
+            LocalTime existingEnd = b.getOraFine();
+            // intervalli [start, end) si sovrappongono se start < otherEnd && end > otherStart
+            return newStart.isBefore(existingEnd) && newEnd.isAfter(existingStart);
+        });
+        if (overlaps) {
+            throw new IllegalStateException("Esiste già un blocco orario che si sovrappone a questo intervallo.");
+        }
 
         BloccoOrario blocco = new BloccoOrario();
         blocco.setMedico(medico);
         blocco.setData(data);
-        blocco.setOraInizio(LocalTime.parse(oraInizio));
-        blocco.setOraFine(LocalTime.parse(oraFine));
+    blocco.setOraInizio(newStart);
+    blocco.setOraFine(newEnd);
+        // Attribuzione di creazione
+        blocco.setCreatedByType(createdByType);
+        blocco.setCreatedById(createdById);
+        blocco.setCreatedByName(createdByName);
+        if (blocco.getCreatedAt() == null) blocco.setCreatedAt(LocalDateTime.now());
 
         BloccoOrario salvato = bloccoOrarioRepository.save(blocco);
 
@@ -122,10 +147,29 @@ public class BloccoOrarioService {
         LocalTime oraFine = blocco.getOraFine();
         LocalDateTime inizioBlocco = LocalDateTime.of(blocco.getData(), oraInizio);
         LocalDateTime fineBlocco = LocalDateTime.of(blocco.getData(), oraFine);
-        long appuntamentiEsistenti = appuntamentoRepository.countAppuntamentiInBlocco(medicoIdDaToken, inizioBlocco, fineBlocco);
-        
-        if (appuntamentiEsistenti > 0) {
-            throw new IllegalStateException("Impossibile cancellare un blocco orario che contiene già appuntamenti prenotati.");
+        long appuntamentiAttivi = appuntamentoRepository.countAppuntamentiInBlocco(medicoIdDaToken, inizioBlocco, fineBlocco);
+        if (appuntamentiAttivi > 0) {
+            // Esistono appuntamenti CONFERMATI nel range: non si può cancellare
+            throw new IllegalStateException("Impossibile cancellare un blocco con appuntamenti attivi. Annulla o sposta prima gli appuntamenti confermati.");
+        }
+
+        // Se ci sono appuntamenti NON attivi (ANNULLATO o COMPLETATO) che riferiscono agli slot del blocco,
+        // stacchiamo il riferimento allo slot per evitare vincoli al delete degli slot
+        List<Slot> slotsDelBloccoAll = slotRepository.findByBloccoOrarioIdOrderByDataEOraInizio(bloccoId);
+        if (!slotsDelBloccoAll.isEmpty()) {
+            List<Long> slotIds = slotsDelBloccoAll.stream().map(Slot::getId).toList();
+            List<Appuntamento> collegati = appuntamentoRepository.findBySlot_IdIn(slotIds);
+            if (!collegati.isEmpty()) {
+                for (Appuntamento a : collegati) {
+                    if (a.getStato() != StatoAppuntamento.CONFERMATO) {
+                        a.setSlot(null);
+                    } else {
+                        // Safety: se arriviamo qui con CONFERMATO, blocca comunque
+                        throw new IllegalStateException("Blocco non cancellabile: trovato appuntamento attivo collegato.");
+                    }
+                }
+                appuntamentoRepository.saveAll(collegati);
+            }
         }
 
         // Se passati i controlli, rimuovi anche eventuali slot generati per questo blocco

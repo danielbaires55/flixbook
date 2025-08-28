@@ -1,6 +1,7 @@
 package com.flixbook.flixbook_backend.config;
-
-import com.flixbook.flixbook_backend.service.CustomUserDetailsService;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import java.util.Collections;
+import java.util.List;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -8,7 +9,6 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -18,11 +18,9 @@ import java.io.IOException;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
-    private final CustomUserDetailsService userDetailsService;
 
-    public JwtAuthenticationFilter(JwtUtil jwtUtil, CustomUserDetailsService userDetailsService) {
+    public JwtAuthenticationFilter(JwtUtil jwtUtil) {
         this.jwtUtil = jwtUtil;
-        this.userDetailsService = userDetailsService;
     }
 
     @Override
@@ -40,21 +38,32 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         jwt = authHeader.substring(7);
-        userEmail = jwtUtil.getEmailFromToken(jwt);
+    userEmail = jwtUtil.getEmailFromToken(jwt);
 
         if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            // Qui carichiamo i dettagli utente, che sappiamo essere del nostro tipo CustomUserDetails
-            UserDetails userDetails = this.userDetailsService.loadUserByUsername(userEmail);
+
+        String role = jwtUtil.getRoleFromToken(jwt);
+        Long userId = jwtUtil.getUserIdFromToken(jwt);
+        Long medicoId = jwtUtil.getMedicoIdFromToken(jwt);
+        List<Long> managed = jwtUtil.getManagedMediciFromToken(jwt);
+        Long acting = jwtUtil.getActingMedicoIdFromToken(jwt);
+        CustomUserDetails userDetails = new CustomUserDetails(
+            userEmail,
+            "", 
+            Collections.singletonList(new SimpleGrantedAuthority(role)),
+            userId,
+            medicoId,
+            managed,
+            acting
+        );
 
             if (jwtUtil.validateToken(jwt)) {
-                // Creiamo il token di autenticazione usando il nostro userDetails completo
-                UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                        userDetails,
-                        null,
-                        userDetails.getAuthorities()
-                );
+        UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+            userDetails,
+            null,
+            userDetails.getAuthorities()
+        );
                 authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                // Inseriamo il pass corretto nel contesto di sicurezza
                 SecurityContextHolder.getContext().setAuthentication(authToken);
             }
         }

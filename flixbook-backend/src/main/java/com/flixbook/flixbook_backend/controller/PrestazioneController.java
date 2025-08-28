@@ -5,7 +5,6 @@ import com.flixbook.flixbook_backend.model.Prestazione;
 import com.flixbook.flixbook_backend.model.MedicoPrestazione;
 import com.flixbook.flixbook_backend.repository.PrestazioneRepository;
 import com.flixbook.flixbook_backend.repository.MedicoPrestazioneRepository;
-import com.flixbook.flixbook_backend.service.CustomUserDetailsService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -26,8 +25,6 @@ public class PrestazioneController {
     @Autowired
     private PrestazioneRepository prestazioneRepository;
     
-    @Autowired
-    private CustomUserDetailsService userDetailsService; // <-- 1. Inietta il CustomUserDetailsService
 
     @Autowired
     private MedicoPrestazioneRepository medicoPrestazioneRepository;
@@ -48,7 +45,7 @@ public class PrestazioneController {
         }
 
         // 2. Carica i dettagli completi dell'utente (medico o collaboratore)
-        CustomUserDetails userDetails = (CustomUserDetails) userDetailsService.loadUserByUsername(authentication.getName());
+    CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
         
         // 3. Estrai l'ID del medico di riferimento (funziona per entrambi i ruoli)
         Long medicoId = userDetails.getMedicoId();

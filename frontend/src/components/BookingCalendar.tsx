@@ -793,6 +793,9 @@ const BookingCalendar: React.FC = () => {
                             </>
                           )}
                         </div>
+                        {prestazione?.tipoPrestazione === 'fisico' && (
+                          <div className="small text-muted">Indirizzo: Via del Benessere, 10 - 20121 Milano (MI)</div>
+                        )}
                         <div className="alert alert-info mb-0">
                           Confermando verrà prenotato lo slot selezionato. Potrai vedere i dettagli nella tua dashboard.
                         </div>

@@ -11,6 +11,9 @@ import java.security.Key;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.List;
+import java.util.Collections;
+import java.util.stream.Collectors;
 import java.util.function.Function;
 
 @Component
@@ -33,6 +36,32 @@ public class JwtUtil {
     public String getEmailFromToken(String token) {
         return extractClaim(token, Claims::getSubject);
     }
+
+    public String getRoleFromToken(String token) {
+        return extractClaim(token, claims -> (String) claims.get("role"));
+    }
+
+    public Long getUserIdFromToken(String token) {
+        return extractClaim(token, claims -> claims.get("userId") == null ? null : ((Number) claims.get("userId")).longValue());
+    }
+
+    public Long getMedicoIdFromToken(String token) {
+        return extractClaim(token, claims -> claims.get("medicoId") == null ? null : ((Number) claims.get("medicoId")).longValue());
+    }
+
+    public List<Long> getManagedMediciFromToken(String token) {
+        return extractClaim(token, claims -> {
+            Object v = claims.get("managedMedici");
+            if (v instanceof List<?> list) {
+                return list.stream().map(o -> ((Number) o).longValue()).collect(Collectors.toList());
+            }
+            return Collections.emptyList();
+        });
+    }
+
+    public Long getActingMedicoIdFromToken(String token) {
+        return extractClaim(token, claims -> claims.get("actingMedicoId") == null ? null : ((Number) claims.get("actingMedicoId")).longValue());
+    }
     
     public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
         final Claims claims = extractAllClaims(token);
@@ -44,6 +73,8 @@ public class JwtUtil {
         claims.put("role", userDetails.getAuthorities().iterator().next().getAuthority());
         claims.put("userId", userDetails.getUserId());
         claims.put("medicoId", userDetails.getMedicoId());
+    claims.put("managedMedici", userDetails.getManagedMedici());
+    claims.put("actingMedicoId", userDetails.getActingMedicoId());
         return createToken(claims, userDetails.getUsername());
     }
 

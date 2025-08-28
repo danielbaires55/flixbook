@@ -7,6 +7,7 @@ import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import './css/CreateBloccoOrarioForm.css';
 import { Modal, Button, OverlayTrigger, Tooltip } from 'react-bootstrap';
+import InfoModal from './InfoModal';
 
 const API_BASE_URL = 'http://localhost:8080/api';
 
@@ -28,6 +29,7 @@ const CreateBloccoOrarioForm: FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [warnModal, setWarnModal] = useState<{ show: boolean; title: string; message: string }>({ show: false, title: '', message: '' });
 
   // UI: calendario popover
   const [showCalendar, setShowCalendar] = useState(false);
@@ -86,17 +88,16 @@ const CreateBloccoOrarioForm: FC = () => {
       setError('Devi essere autenticato per creare un blocco orario.');
       return;
     }
-    
     setIsSubmitting(true);
     setError(null);
     setMessage(null);
 
-  const { oraInizio, oraFine, includePausa, pausaInizio, pausaFine } = formData;
+    const { oraInizio, oraFine, includePausa, pausaInizio, pausaFine } = formData;
 
     if (oraFine <= oraInizio || (includePausa && (pausaFine <= pausaInizio || pausaInizio < oraInizio || pausaFine > oraFine))) {
-        setError("Gli orari inseriti non sono validi. Controlla che l'ora di fine sia successiva a quella di inizio e che la pausa sia contenuta nell'orario di lavoro.");
-        setIsSubmitting(false);
-        return;
+      setError("Gli orari inseriti non sono validi. Controlla che l'ora di fine sia successiva a quella di inizio e che la pausa sia contenuta nell'orario di lavoro.");
+      setIsSubmitting(false);
+      return;
     }
 
     const datesToCreate: string[] = multiSelect ? selectedYMDs : (formData.data ? [formData.data] : []);
@@ -117,23 +118,37 @@ const CreateBloccoOrarioForm: FC = () => {
 
     try {
       const headers = { Authorization: `Bearer ${user.token}` };
-  const requests: Promise<unknown>[] = [];
-
+      // Esegui in sequenza per poter interrompere e mostrare il warning al primo conflitto
       for (const giorno of datesToCreate) {
         if (includePausa) {
           const mattina = { data: giorno, oraInizio, oraFine: pausaInizio };
           const pomeriggio = { data: giorno, oraInizio: pausaFine, oraFine };
-          requests.push(
-            axios.post(`${API_BASE_URL}/blocchi-orario/create`, mattina, { headers }),
-            axios.post(`${API_BASE_URL}/blocchi-orario/create`, pomeriggio, { headers })
-          );
+          try {
+            await axios.post(`${API_BASE_URL}/blocchi-orario/create`, mattina, { headers });
+            await axios.post(`${API_BASE_URL}/blocchi-orario/create`, pomeriggio, { headers });
+          } catch (e: unknown) {
+            const err = e as { response?: { data?: unknown; status?: number } };
+            const backendMsg = typeof err?.response?.data === 'string' ? err.response.data as string : undefined;
+            const msg = backendMsg || 'Esiste già un blocco che copre parte di questo intervallo. Modifica gli orari o scegli un altro giorno.';
+            setWarnModal({ show: true, title: 'Attenzione', message: msg });
+            setIsSubmitting(false);
+            return;
+          }
         } else {
           const unico = { data: giorno, oraInizio, oraFine };
-          requests.push(axios.post(`${API_BASE_URL}/blocchi-orario/create`, unico, { headers }));
+          try {
+            await axios.post(`${API_BASE_URL}/blocchi-orario/create`, unico, { headers });
+          } catch (e: unknown) {
+            const err = e as { response?: { data?: unknown; status?: number } };
+            const backendMsg = typeof err?.response?.data === 'string' ? err.response.data as string : undefined;
+            const msg = backendMsg || 'Esiste già un blocco che copre parte di questo intervallo. Modifica gli orari o scegli un altro giorno.';
+            setWarnModal({ show: true, title: 'Attenzione', message: msg });
+            setIsSubmitting(false);
+            return;
+          }
         }
       }
 
-      await Promise.all(requests);
       if (multiSelect) {
         setSelectedYMDs([]);
         setMessage(`Creati blocchi per ${datesToCreate.length} giorno${datesToCreate.length>1?'i':''}.`);
@@ -381,6 +396,13 @@ const CreateBloccoOrarioForm: FC = () => {
         <Button variant="primary" onClick={() => setShowHelp(false)}>Ho capito</Button>
       </Modal.Footer>
     </Modal>
+    <InfoModal
+      show={warnModal.show}
+      title={warnModal.title}
+      message={warnModal.message}
+      variant="warning"
+      onClose={() => setWarnModal({ show: false, title: '', message: '' })}
+    />
     </>
   );
 };

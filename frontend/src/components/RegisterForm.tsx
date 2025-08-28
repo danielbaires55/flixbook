@@ -34,13 +34,13 @@ const PazienteRegistrationForm: FC = () => {
 
     try {
       await axios.post(`${API_BASE_URL}/pazienti/register`, formData);
-      setSuccess("Registrazione completata! Sarai reindirizzato al login.");
+  setSuccess('Registrazione completata. Verrai reindirizzato al login.');
       setTimeout(() => navigate("/login"), 2000);
     } catch (err) {
       if (axios.isAxiosError(err) && err.response?.status === 409) {
         setError("Questa email è già in uso.");
       } else {
-        setError("Errore nella registrazione. Riprova.");
+  setError('Impossibile completare la registrazione. Riprova.');
       }
     }
   };
@@ -49,9 +49,7 @@ const PazienteRegistrationForm: FC = () => {
     <div className="registration-page-container">
       <div className="card registration-card">
         <div className="card-body">
-          <h2 className="card-title text-center mb-4">
-            Registrazione Paziente
-          </h2>
+          <h2 className="card-title text-center mb-4">Crea account paziente</h2>
           <form onSubmit={handleSubmit}>
             {error && <div className="alert alert-danger">{error}</div>}
             {success && <div className="alert alert-success">{success}</div>}
@@ -128,7 +126,7 @@ const PazienteRegistrationForm: FC = () => {
               </div>
               <div className="col-md-6">
                 <label htmlFor="dataNascita" className="form-label">
-                  Data di Nascita
+                  Data di nascita
                 </label>
                 <input
                   type="date"
@@ -195,14 +193,12 @@ const PazienteRegistrationForm: FC = () => {
 
             <div className="d-flex justify-content-center">
               <button type="submit" className="btn btn-primary w-30 mt-4">
-                Crea Account
+                Crea account
               </button>
             </div>
 
             <div className="text-center mt-3">
-              <small>
-                Hai già un account? <Link to="/login">Accedi</Link>
-              </small>
+              <small>Hai già un account? <Link to="/login">Accedi</Link></small>
             </div>
           </form>
         </div>

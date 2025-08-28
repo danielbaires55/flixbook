@@ -3,6 +3,7 @@ export interface UserData {
     role: string;
     userId: number;
     medicoId: number | null;
+    actingMedicoId?: number | null;
 }
 
 export interface AuthContextType {
