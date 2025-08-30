@@ -18,6 +18,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler; // <-- IMPORT AGGIUNTO
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -61,7 +62,8 @@ public class SecurityConfig {
                     .accessDeniedHandler(accessDeniedHandler)
                 )
 
-                .authorizeHttpRequests(authorize -> authorize
+        .authorizeHttpRequests(authorize -> authorize
+            .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(
                                 "/api/auth/**",
                                 "/api/pazienti/register",
@@ -69,7 +71,7 @@ public class SecurityConfig {
                                 "/api/prestazioni/bySpecialita/**",
                                 "/api/medici/info/**",
                                 "/api/medici/byPrestazione/**",
-                                "/api/disponibilita/available",
+                                "/api/sedi/**",
                                 "/prof_img/**",
                                 "/api/medici",
                                 "/icons/**",
@@ -77,22 +79,22 @@ public class SecurityConfig {
                                 "/api/slots/prossimi-disponibili",
                                 "/api/slots/available-by-day"
                         ).permitAll()
+                        .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
                         .requestMatchers(
                                 "/api/medici/**",
                                 "/api/appuntamenti/medico/**",
-                                "/api/disponibilita/medico/**",
                                 "/api/blocchi-orario/**",
                                 "/api/slots/blocchi/**",
                                 "/api/slots/*/toggle",
                                 "/api/slots/*"
-                        ).hasAnyAuthority("ROLE_MEDICO", "ROLE_COLLABORATORE")
+                        ).hasAnyAuthority("ROLE_MEDICO", "ROLE_COLLABORATORE", "ROLE_ADMIN")
                         .requestMatchers(
                                 "/api/pazienti/**",
                                 "/api/appuntamenti/prenota",
                                 "/api/appuntamenti/paziente/**",
                                 "/api/appuntamenti/annulla/**",
                                 "/api/feedback/**"
-                        ).hasAuthority("ROLE_PAZIENTE")
+                        ).hasAnyAuthority("ROLE_PAZIENTE", "ROLE_ADMIN")
                         .anyRequest().authenticated()
                 )
                 .authenticationProvider(authenticationProvider())
@@ -101,10 +103,25 @@ public class SecurityConfig {
         return http.build();
     }
 
+    // Bypass security filters for static resources like profile images
+    @Bean
+    public WebSecurityCustomizer webSecurityCustomizer() {
+        return (web) -> web.ignoring().requestMatchers(
+            "/prof_img/**",
+            "/icons/**"
+        );
+    }
+
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:5173", "http://localhost:5174"));
+        // In dev, accetta localhost, 127.0.0.1 e LAN (192.168.*, 10.*) per il frontend
+        configuration.setAllowedOriginPatterns(List.of(
+            "http://localhost:*",
+            "http://127.0.0.1:*",
+            "http://192.168.*:*",
+            "http://10.*:*"
+        ));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);

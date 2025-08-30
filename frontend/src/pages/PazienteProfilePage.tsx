@@ -16,6 +16,7 @@ interface PazienteProfile {
   citta: string;
   provincia: string;
   cap: string;
+    codiceFiscale?: string;
 }
 
 const PazienteProfiloPage: FC = () => {
@@ -55,9 +56,16 @@ const PazienteProfiloPage: FC = () => {
         e.preventDefault();
         if (!user) return;
         setMessage(''); setError('');
+        // Validazione Codice Fiscale (16 caratteri alfanumerici)
+        const cf = (formData.codiceFiscale || '').toUpperCase().trim();
+        const cfOk = /^[A-Z0-9]{16}$/.test(cf);
+        if (!cfOk) {
+            setError('Inserisci un Codice Fiscale valido (16 caratteri alfanumerici).');
+            return;
+        }
         try {
             const headers = { Authorization: `Bearer ${user.token}` };
-            await axios.put(`${API_BASE_URL}/pazienti/profilo`, formData, { headers });
+            await axios.put(`${API_BASE_URL}/pazienti/profilo`, { ...formData, codiceFiscale: cf }, { headers });
             setMessage('Profilo aggiornato con successo!');
         } catch {
             setError('Errore durante l\'aggiornamento del profilo.');
@@ -112,6 +120,20 @@ const PazienteProfiloPage: FC = () => {
                                     <div className="col-md-6 mb-3"><label className="form-label">Cognome</label><input type="text" name="cognome" className="form-control" value={formData.cognome || ''} onChange={handleChange} /></div>
                                     <div className="col-md-6 mb-3"><label className="form-label">Telefono</label><input type="tel" name="telefono" className="form-control" value={formData.telefono || ''} onChange={handleChange} /></div>
                                     <div className="col-md-6 mb-3"><label className="form-label">Data di Nascita</label><input type="date" name="dataNascita" className="form-control" value={formData.dataNascita || ''} onChange={handleChange} /></div>
+                                    <div className="col-12 mb-3">
+                                        <label className="form-label">Codice Fiscale</label>
+                                        <input
+                                            type="text"
+                                            name="codiceFiscale"
+                                            className="form-control"
+                                            value={(formData.codiceFiscale || '').toUpperCase()}
+                                            onChange={(e) => setFormData({ ...formData, codiceFiscale: e.target.value.toUpperCase() })}
+                                            placeholder="ES. RSSMRA85M01H501Z"
+                                            maxLength={16}
+                                            required
+                                        />
+                                        <div className="form-text">Obbligatorio per emettere documenti fiscali e per le videoconsulenze.</div>
+                                    </div>
                                     <div className="col-12 mb-3"><label className="form-label">Indirizzo</label><input type="text" name="indirizzo" className="form-control" value={formData.indirizzo || ''} onChange={handleChange} /></div>
                                     <div className="col-md-5 mb-3"><label className="form-label">Città</label><input type="text" name="citta" className="form-control" value={formData.citta || ''} onChange={handleChange} /></div>
                                     <div className="col-md-4 mb-3"><label className="form-label">Provincia</label><input type="text" name="provincia" className="form-control" value={formData.provincia || ''} onChange={handleChange} /></div>

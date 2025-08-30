@@ -19,8 +19,30 @@ public interface AppuntamentoRepository extends JpaRepository<Appuntamento, Long
 
     List<Appuntamento> findByPazienteEmail(String email);
 
+       long countByMedico_Id(Long medicoId);
+
+    @Query("SELECT DISTINCT a FROM Appuntamento a " +
+           "LEFT JOIN FETCH a.slot s " +
+           "LEFT JOIN FETCH s.bloccoOrario b " +
+           "LEFT JOIN FETCH b.sede sed " +
+           "LEFT JOIN FETCH a.paziente p " +
+           "LEFT JOIN FETCH a.medico m " +
+           "LEFT JOIN FETCH a.prestazione pr " +
+           "WHERE p.email = :email")
+    List<Appuntamento> findByPazienteEmailWithDetails(@Param("email") String email);
+
     @Query("SELECT a FROM Appuntamento a WHERE a.medico.id = :medicoId")
     List<Appuntamento> findAppuntamentiByMedicoId(@Param("medicoId") Long medicoId);
+
+    @Query("SELECT DISTINCT a FROM Appuntamento a " +
+           "LEFT JOIN FETCH a.slot s " +
+           "LEFT JOIN FETCH s.bloccoOrario b " +
+           "LEFT JOIN FETCH b.sede sed " +
+           "LEFT JOIN FETCH a.paziente p " +
+           "LEFT JOIN FETCH a.medico m " +
+           "LEFT JOIN FETCH a.prestazione pr " +
+           "WHERE m.id = :medicoId")
+    List<Appuntamento> findAppuntamentiByMedicoIdWithDetails(@Param("medicoId") Long medicoId);
 
     @Query("SELECT a FROM Appuntamento a JOIN FETCH a.paziente JOIN FETCH a.medico JOIN FETCH a.prestazione " +
            "WHERE a.stato = com.flixbook.flixbook_backend.model.StatoAppuntamento.CONFERMATO " +

@@ -40,6 +40,9 @@ const Login: FC<LoginProps> = () => { // Rimosso onRegistratiClick dalle props
                     navigate('/medico-dashboard', { replace: true });
                 } else if (role === 'ROLE_PAZIENTE') {
                     navigate('/paziente-dashboard', { replace: true });
+                } else if (role === 'ROLE_ADMIN') {
+                    // Admin: manda alla sezione admin (medici) o alla dashboard medico condivisa
+                    navigate('/admin/medici', { replace: true });
                 } else {
                     setError('Ruolo utente non valido.');
                 }

@@ -44,6 +44,10 @@ public class Appuntamento {
     @Column(name = "link_videocall")
     private String linkVideocall;
 
+    // Consenso privacy specifico per documenti allegati dal paziente per questo appuntamento
+    @Column(name = "privacy_consenso", nullable = false)
+    private boolean privacyConsenso = false;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "stato", nullable = false)
     private StatoAppuntamento stato;
@@ -68,4 +72,65 @@ public class Appuntamento {
     @JoinColumn(name = "slot_id")
     @JsonIgnore
     private Slot slot;
+
+    // ====== Sede info (computed, non persistente) ======
+    @Transient
+    public Long getSedeId() {
+        try {
+            if (slot != null && slot.getBloccoOrario() != null && slot.getBloccoOrario().getSede() != null) {
+                return slot.getBloccoOrario().getSede().getId();
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    @Transient
+    public String getSedeNome() {
+        try {
+            if (slot != null && slot.getBloccoOrario() != null && slot.getBloccoOrario().getSede() != null) {
+                return slot.getBloccoOrario().getSede().getNome();
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    @Transient
+    public String getSedeIndirizzo() {
+        try {
+            if (slot != null && slot.getBloccoOrario() != null && slot.getBloccoOrario().getSede() != null) {
+                return slot.getBloccoOrario().getSede().getIndirizzo();
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    @Transient
+    public String getSedeCitta() {
+        try {
+            if (slot != null && slot.getBloccoOrario() != null && slot.getBloccoOrario().getSede() != null) {
+                return slot.getBloccoOrario().getSede().getCitta();
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    @Transient
+    public String getSedeProvincia() {
+        try {
+            if (slot != null && slot.getBloccoOrario() != null && slot.getBloccoOrario().getSede() != null) {
+                return slot.getBloccoOrario().getSede().getProvincia();
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    @Transient
+    public String getSedeCap() {
+        try {
+            if (slot != null && slot.getBloccoOrario() != null && slot.getBloccoOrario().getSede() != null) {
+                return slot.getBloccoOrario().getSede().getCap();
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
 }

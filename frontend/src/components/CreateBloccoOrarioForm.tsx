@@ -6,7 +6,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import './css/CreateBloccoOrarioForm.css';
-import { Modal, Button, OverlayTrigger, Tooltip } from 'react-bootstrap';
+import { Modal, Button, OverlayTrigger, Tooltip, Form } from 'react-bootstrap';
 import InfoModal from './InfoModal';
 
 const API_BASE_URL = 'http://localhost:8080/api';
@@ -30,6 +30,23 @@ const CreateBloccoOrarioForm: FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [warnModal, setWarnModal] = useState<{ show: boolean; title: string; message: string }>({ show: false, title: '', message: '' });
+
+  // Sedi
+  type Sede = { id: number; nome: string };
+  const [sedi, setSedi] = useState<Sede[]>([]);
+  const [sedeId, setSedeId] = useState<number | null>(null);
+
+  // Prestazioni del medico
+  type Prestazione = { id: number; nome: string; tipoPrestazione: 'fisico' | 'virtuale' };
+  const [prestazioni, setPrestazioni] = useState<Prestazione[]>([]);
+  const [prestazioneIds, setPrestazioneIds] = useState<number[]>([]); // default: tutte
+
+  // Flag: tutte le prestazioni selezionate sono virtuali (e almeno una selezionata)
+  const allVirtual = (
+    prestazioni.length > 0 &&
+    prestazioneIds.length > 0 &&
+    prestazioneIds.every(id => prestazioni.find(p => p.id === id)?.tipoPrestazione === 'virtuale')
+  );
 
   // UI: calendario popover
   const [showCalendar, setShowCalendar] = useState(false);
@@ -73,6 +90,49 @@ const CreateBloccoOrarioForm: FC = () => {
     return () => document.removeEventListener('mousedown', handler);
   }, [showCalendar]);
 
+  // Load sedi
+  useEffect(() => {
+    const loadSedi = async () => {
+      try {
+        if (!user) { setSedi([]); setSedeId(null); return; }
+        const { data } = await axios.get(`${API_BASE_URL}/medici/sedi`, { headers: { Authorization: `Bearer ${user.token}` } });
+        const list = (data as Sede[]).filter(s => s && typeof s.id === 'number');
+        setSedi(list);
+        // set default to first assigned, if any
+        setSedeId(list[0]?.id ?? null);
+      } catch {
+        // silent: keep null, backend will enforce association
+        setSedi([]);
+        setSedeId(null);
+      }
+    };
+    loadSedi();
+  }, [user]);
+
+  // Load prestazioni del medico loggato
+  useEffect(() => {
+    const loadPrestazioni = async () => {
+      if (!user) return;
+      try {
+        const { data } = await axios.get<Prestazione[]>(`${API_BASE_URL}/prestazioni/by-medico-loggato`, {
+          headers: { Authorization: `Bearer ${user.token}` }
+        });
+        const list: Prestazione[] = (data || []).map((p) => {
+          const raw = (p as unknown as { id: number | string; nome: string; tipoPrestazione?: string });
+          const tipo = raw?.tipoPrestazione === 'virtuale' ? 'virtuale' : 'fisico';
+          return { id: Number(raw.id), nome: String(raw.nome), tipoPrestazione: tipo };
+        });
+        setPrestazioni(list);
+        setPrestazioneIds(list.map(p => p.id)); // default: tutte selezionate
+      } catch {
+        // silently ignore; keep empty -> backend tratterà come tutte
+        setPrestazioni([]);
+        setPrestazioneIds([]);
+      }
+    };
+    loadPrestazioni();
+  }, [user]);
+
   // 2. Aggiornato handleChange per gestire anche le checkbox
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
@@ -107,6 +167,13 @@ const CreateBloccoOrarioForm: FC = () => {
       return;
     }
 
+    // Se il medico ha prestazioni caricate e l'utente ha deselezionato tutto, blocca
+    if (prestazioni.length > 0 && prestazioneIds.length === 0) {
+      setError('Seleziona almeno una prestazione per questo blocco, oppure lascia tutte selezionate.');
+      setIsSubmitting(false);
+      return;
+    }
+
     // Verifica: nessuna data nel passato
     const today = startOfToday();
     const hasPast = datesToCreate.some(d => new Date(d + 'T00:00:00') < today);
@@ -116,13 +183,16 @@ const CreateBloccoOrarioForm: FC = () => {
       return;
     }
 
-    try {
+  try {
       const headers = { Authorization: `Bearer ${user.token}` };
       // Esegui in sequenza per poter interrompere e mostrare il warning al primo conflitto
       for (const giorno of datesToCreate) {
         if (includePausa) {
-          const mattina = { data: giorno, oraInizio, oraFine: pausaInizio };
-          const pomeriggio = { data: giorno, oraInizio: pausaFine, oraFine };
+          const basePayload: { sedeId?: number; prestazioneIds?: number[] } = {};
+          if (sedeId && !allVirtual) basePayload.sedeId = sedeId;
+          if (prestazioneIds.length) basePayload.prestazioneIds = prestazioneIds;
+          const mattina: Record<string, string | number | number[]> = { data: giorno, oraInizio, oraFine: pausaInizio, ...basePayload };
+          const pomeriggio: Record<string, string | number | number[]> = { data: giorno, oraInizio: pausaFine, oraFine, ...basePayload };
           try {
             await axios.post(`${API_BASE_URL}/blocchi-orario/create`, mattina, { headers });
             await axios.post(`${API_BASE_URL}/blocchi-orario/create`, pomeriggio, { headers });
@@ -135,7 +205,13 @@ const CreateBloccoOrarioForm: FC = () => {
             return;
           }
         } else {
-          const unico = { data: giorno, oraInizio, oraFine };
+          const unico: Record<string, string | number | number[]> = {
+            data: giorno,
+            oraInizio,
+            oraFine,
+            ...(sedeId && !allVirtual ? { sedeId } : {}),
+            ...(prestazioneIds.length ? { prestazioneIds } : {})
+          };
           try {
             await axios.post(`${API_BASE_URL}/blocchi-orario/create`, unico, { headers });
           } catch (e: unknown) {
@@ -202,6 +278,24 @@ const CreateBloccoOrarioForm: FC = () => {
               <form onSubmit={handleSubmit}>
                 {error && <div className="alert alert-danger">{error}</div>}
                 {message && <div className="alert alert-success">{message}</div>}
+
+                <div className="mb-3">
+                  <Form.Label className="fw-bold">Sede</Form.Label>
+                  <Form.Select
+                    aria-label="Seleziona sede"
+                    value={sedeId ?? ''}
+                    onChange={(e) => setSedeId(e.target.value ? Number(e.target.value) : null)}
+                    disabled={allVirtual}
+                  >
+                    {sedi.length === 0 && <option value="">(default) Sede Principale</option>}
+                    {sedi.map(s => (
+                      <option key={s.id} value={s.id}>{s.nome}</option>
+                    ))}
+                  </Form.Select>
+                  {allVirtual && (
+                    <div className="form-text">Per blocchi solo virtuali la sede non è necessaria e verrà ignorata.</div>
+                  )}
+                </div>
 
                 <div className="row g-3 justify-content-center mb-3 border-bottom pb-3">
                   <div className="col-md-4">
@@ -300,6 +394,56 @@ const CreateBloccoOrarioForm: FC = () => {
                     <label htmlFor="oraFine" className="form-label fw-bold">Alle ore</label>
                     <input type="time" className="form-control" id="oraFine" name="oraFine" value={formData.oraFine} onChange={handleChange} required step="1800" />
                   </div>
+                </div>
+
+                {/* Prestazioni consentite per il blocco */}
+                <div className="mb-3">
+                  <Form.Label className="fw-bold d-flex align-items-center gap-2">
+                    Prestazioni del blocco
+                    <OverlayTrigger placement="top" overlay={<Tooltip id="tt-prest">Per default sono selezionate tutte le prestazioni del medico; puoi deselezionare quelle non disponibili per questo blocco (es. solo videoconsulto).</Tooltip>}>
+                      <span style={{cursor:'help'}} aria-label="Aiuto">ⓘ</span>
+                    </OverlayTrigger>
+                  </Form.Label>
+                  <div className="form-text mb-2">
+                    Le prestazioni selezionate saranno prenotabili in questo blocco. Usa i filtri rapidi o la selezione manuale.
+                  </div>
+                  {prestazioni.length === 0 ? (
+                    <div className="form-text">Tutte le prestazioni del medico saranno disponibili.</div>
+                  ) : (
+                    <div>
+                      {/* Filtri rapidi */}
+                      <div className="d-flex flex-wrap gap-2 mb-2">
+                        <Button variant="outline-secondary" size="sm" onClick={() => setPrestazioneIds(prestazioni.map(p => p.id))}>Seleziona tutte</Button>
+                        <Button variant="outline-secondary" size="sm" onClick={() => setPrestazioneIds([])}>Deseleziona tutte</Button>
+                        <Button variant="outline-primary" size="sm" onClick={() => setPrestazioneIds(prestazioni.filter(p => p.tipoPrestazione === 'virtuale').map(p => p.id))}>Tieni solo virtuali</Button>
+                        <Button variant="outline-primary" size="sm" onClick={() => setPrestazioneIds(prestazioni.filter(p => p.tipoPrestazione === 'fisico').map(p => p.id))}>Tieni solo fisiche</Button>
+                        <Button variant="outline-dark" size="sm" onClick={() => setPrestazioneIds(prev => prev.filter(id => prestazioni.find(p => p.id === id)?.tipoPrestazione !== 'virtuale'))}>Rimuovi virtuali</Button>
+                        <Button variant="outline-dark" size="sm" onClick={() => setPrestazioneIds(prev => prev.filter(id => prestazioni.find(p => p.id === id)?.tipoPrestazione !== 'fisico'))}>Rimuovi fisiche</Button>
+                      </div>
+                      <div className="small text-muted mb-2">Selezionate: {prestazioneIds.length} / {prestazioni.length}</div>
+                      <div className="d-flex flex-wrap gap-2" aria-label="Seleziona prestazioni consentite">
+        {prestazioni.map(p => {
+                          const selected = prestazioneIds.includes(p.id);
+                          return (
+                            <span
+                              key={p.id}
+                              className={`badge rounded-pill ${selected ? 'bg-primary' : 'bg-light text-dark border'}`}
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => setPrestazioneIds(prev => prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id])}
+                              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                setPrestazioneIds(prev => prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id]);
+                              }}}
+                              title={`${selected ? 'Selezionata' : 'Deselezionata'} - ${p.nome}`}
+                            >
+          {p.nome}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {multiSelect && selectedYMDs.length > 0 && (

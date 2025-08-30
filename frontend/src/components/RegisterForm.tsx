@@ -14,6 +14,7 @@ const PazienteRegistrationForm: FC = () => {
     passwordHash: "",
     telefono: "",
     dataNascita: "",
+  codiceFiscale: "",
     indirizzo: "",
     citta: "",
     provincia: "",
@@ -24,7 +25,12 @@ const PazienteRegistrationForm: FC = () => {
   const navigate = useNavigate();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    if (name === 'codiceFiscale') {
+      setFormData({ ...formData, codiceFiscale: value.toUpperCase() });
+    } else {
+      setFormData({ ...formData, [name]: value });
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -32,8 +38,16 @@ const PazienteRegistrationForm: FC = () => {
     setError(null);
     setSuccess(null);
 
+    // Validazione Codice Fiscale (16 caratteri alfanumerici)
+    const cf = (formData.codiceFiscale || '').trim().toUpperCase();
+    const cfOk = /^[A-Z0-9]{16}$/.test(cf);
+    if (!cfOk) {
+      setError('Inserisci un Codice Fiscale valido (16 caratteri alfanumerici).');
+      return;
+    }
+
     try {
-      await axios.post(`${API_BASE_URL}/pazienti/register`, formData);
+      await axios.post(`${API_BASE_URL}/pazienti/register`, { ...formData, codiceFiscale: cf });
   setSuccess('Registrazione completata. Verrai reindirizzato al login.');
       setTimeout(() => navigate("/login"), 2000);
     } catch (err) {
@@ -135,6 +149,22 @@ const PazienteRegistrationForm: FC = () => {
                   name="dataNascita"
                   value={formData.dataNascita}
                   onChange={handleChange}
+                />
+              </div>
+              <div className="col-md-6">
+                <label htmlFor="codiceFiscale" className="form-label">
+                  Codice Fiscale
+                </label>
+                <input
+                  type="text"
+                  className="form-control"
+                  id="codiceFiscale"
+                  name="codiceFiscale"
+                  value={formData.codiceFiscale}
+                  onChange={handleChange}
+                  placeholder="ES. RSSMRA85M01H501Z"
+                  maxLength={16}
+                  required
                 />
               </div>
               <div className="col-12">

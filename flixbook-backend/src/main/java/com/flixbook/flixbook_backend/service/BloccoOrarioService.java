@@ -19,6 +19,8 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.HashSet;
 
 @Service
 @Transactional
@@ -36,6 +38,18 @@ public class BloccoOrarioService {
     @Autowired
     private SlotRepository slotRepository;
 
+    @Autowired
+    private com.flixbook.flixbook_backend.repository.SedeRepository sedeRepository;
+
+    @Autowired
+    private com.flixbook.flixbook_backend.repository.MedicoSedeRepository medicoSedeRepository;
+
+    @Autowired
+    private com.flixbook.flixbook_backend.repository.MedicoPrestazioneRepository medicoPrestazioneRepository;
+
+    @Autowired
+    private com.flixbook.flixbook_backend.repository.PrestazioneRepository prestazioneRepository;
+
     /**
      * Crea un nuovo blocco orario per un medico, persistendo anche i metadati di creazione.
      */
@@ -45,7 +59,9 @@ public class BloccoOrarioService {
                                            String oraFine,
                                            String createdByType,
                                            Long createdById,
-                                           String createdByName) {
+                                           String createdByName,
+                                           Long sedeId,
+                                           List<Long> prestazioneIds) {
         Medico medico = medicoRepository.findById(medicoId)
                 .orElseThrow(() -> new IllegalArgumentException("Medico non trovato con ID: " + medicoId));
 
@@ -73,6 +89,61 @@ public class BloccoOrarioService {
         blocco.setCreatedById(createdById);
         blocco.setCreatedByName(createdByName);
         if (blocco.getCreatedAt() == null) blocco.setCreatedAt(LocalDateTime.now());
+
+        // Determina se il blocco è esclusivamente virtuale (quando fornita una lista di prestazioni)
+        boolean bloccoSoloVirtuale = false;
+        if (prestazioneIds != null && !prestazioneIds.isEmpty()) {
+            var tipi = prestazioneRepository.findAllById(prestazioneIds).stream()
+                .map(com.flixbook.flixbook_backend.model.Prestazione::getTipoPrestazione)
+                .collect(java.util.stream.Collectors.toSet());
+            bloccoSoloVirtuale = (tipi.size() == 1 && tipi.contains(com.flixbook.flixbook_backend.model.TipoPrestazione.virtuale));
+        }
+
+        // Sede association: per blocchi solo-virtuali non è richiesta; altrimenti enforce/default
+        if (bloccoSoloVirtuale) {
+            // Nessuna sede per blocchi interamente virtuali
+            blocco.setSede(null);
+        } else {
+            if (sedeId != null) {
+                var sede = sedeRepository.findById(sedeId)
+                    .orElseThrow(() -> new IllegalArgumentException("Sede non trovata con ID: " + sedeId));
+                boolean associato = medicoSedeRepository.medicoAssociatoASede(medicoId, sede.getId());
+                if (!associato) {
+                    throw new SecurityException("Il medico non è associato alla sede selezionata.");
+                }
+                blocco.setSede(sede);
+            } else {
+                // Quando la sede non è specificata, per blocchi non virtuali scegli la prima sede associata al medico
+                var allSedi = sedeRepository.findAll();
+                var primaAssociata = allSedi.stream()
+                    .filter(s -> medicoSedeRepository.medicoAssociatoASede(medicoId, s.getId()))
+                    .findFirst()
+                    .orElse(null);
+                if (primaAssociata == null) {
+                    throw new IllegalStateException("Nessuna sede associata al medico: specifica una sede o associa il medico ad almeno una sede.");
+                }
+                blocco.setSede(primaAssociata);
+            }
+        }
+
+        // Prestazioni consentite: se lista fornita => vincola; altrimenti lascia null (tutte)
+        if (prestazioneIds != null && !prestazioneIds.isEmpty()) {
+            // Valida che ogni prestazione appartenga al medico (medici_prestazioni)
+            List<com.flixbook.flixbook_backend.model.MedicoPrestazione> assocs = medicoPrestazioneRepository.findByMedicoId(medicoId);
+            Set<Long> allowed = new HashSet<>();
+            for (var mp : assocs) allowed.add(mp.getPrestazioneId());
+            Set<Long> toAttach = new HashSet<>();
+            for (Long pid : prestazioneIds) {
+                if (!allowed.contains(pid)) {
+                    throw new SecurityException("Prestazione non associata al medico: id=" + pid);
+                }
+                toAttach.add(pid);
+            }
+            if (!toAttach.isEmpty()) {
+                var prestList = prestazioneRepository.findAllById(toAttach);
+                blocco.setPrestazioniConsentite(new java.util.HashSet<>(prestList));
+            }
+        }
 
         BloccoOrario salvato = bloccoOrarioRepository.save(blocco);
 
@@ -131,6 +202,32 @@ public class BloccoOrarioService {
     }
 
     /**
+     * Trova tutti i blocchi orario futuri per un dato medico in una sede specifica.
+     */
+    public List<BloccoOrario> findBlocchiFuturiByMedicoIdAndSede(Long medicoId, Long sedeId) {
+        List<BloccoOrario> blocchi = bloccoOrarioRepository
+            .findByMedicoIdAndSede_IdAndDataGreaterThanEqualOrderByDataAsc(medicoId, sedeId, LocalDate.now());
+
+        LocalDateTime now = LocalDateTime.now();
+        return blocchi.stream().filter(blocco -> {
+            LocalDateTime inizioBlocco = LocalDateTime.of(blocco.getData(), blocco.getOraInizio());
+            LocalDateTime fineBlocco = LocalDateTime.of(blocco.getData(), blocco.getOraFine());
+
+            long appuntamentiAttivi = appuntamentoRepository.countAppuntamentiInBlocco(
+                medicoId, inizioBlocco, fineBlocco);
+            if (appuntamentiAttivi > 0) return true;
+
+            List<Slot> slots = slotRepository.findByBloccoOrarioIdOrderByDataEOraInizio(blocco.getId());
+            if (slots.isEmpty()) {
+                return fineBlocco.isAfter(now);
+            }
+            boolean haSlotFuturiDisponibili = slots.stream()
+                .anyMatch(s -> s.getStato() == SlotStato.DISPONIBILE && s.getDataEOraInizio().isAfter(now));
+            return haSlotFuturiDisponibili;
+        }).toList();
+    }
+
+    /**
      * Cancella un blocco orario, dopo aver verificato i permessi e che non ci siano appuntamenti.
      */
     public void deleteBloccoOrario(Long bloccoId, Long medicoIdDaToken) {
@@ -159,6 +256,15 @@ public class BloccoOrarioService {
         if (!slotsDelBloccoAll.isEmpty()) {
             List<Long> slotIds = slotsDelBloccoAll.stream().map(Slot::getId).toList();
             List<Appuntamento> collegati = appuntamentoRepository.findBySlot_IdIn(slotIds);
+
+            // Se esistono appuntamenti COMPLETATI collegati, consenti la cancellazione solo se il blocco è già terminato
+            boolean hasCompletati = collegati.stream().anyMatch(a -> a.getStato() == StatoAppuntamento.COMPLETATO);
+            if (hasCompletati) {
+                LocalDateTime now = LocalDateTime.now();
+                if (fineBlocco.isAfter(now)) {
+                    throw new IllegalStateException("Non puoi eliminare questo blocco: contiene appuntamenti completati ma il blocco non è ancora terminato.");
+                }
+            }
             if (!collegati.isEmpty()) {
                 for (Appuntamento a : collegati) {
                     if (a.getStato() != StatoAppuntamento.CONFERMATO) {

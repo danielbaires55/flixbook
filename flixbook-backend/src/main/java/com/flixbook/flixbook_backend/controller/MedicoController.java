@@ -3,6 +3,9 @@ package com.flixbook.flixbook_backend.controller;
 
 import com.flixbook.flixbook_backend.config.CustomUserDetails; // <-- 1. IMPORTA CUSTOMUSERDETAILS
 import com.flixbook.flixbook_backend.model.Medico;
+import com.flixbook.flixbook_backend.model.Sede;
+import com.flixbook.flixbook_backend.repository.SedeRepository;
+import com.flixbook.flixbook_backend.repository.MedicoSedeRepository;
 import com.flixbook.flixbook_backend.service.MedicoService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -28,6 +31,12 @@ public class MedicoController {
 
     @Autowired
     private MedicoService medicoService;
+
+    @Autowired
+    private SedeRepository sedeRepository;
+
+    @Autowired
+    private MedicoSedeRepository medicoSedeRepository;
 
     // Removed unused userDetailsService; we now rely on the Authentication principal
 
@@ -123,5 +132,24 @@ public class MedicoController {
         Long medicoId = userDetails.getMedicoId();
         Medico medicoAggiornato = medicoService.updateImmagineProfilo(medicoId, file);
         return ResponseEntity.ok(medicoAggiornato);
+    }
+
+    // Restituisce solo le sedi associate al medico autenticato (o collaboratore del medico)
+    @GetMapping("/sedi")
+    public ResponseEntity<?> getSediAssociate(Authentication authentication) {
+        Object principal = authentication.getPrincipal();
+        if (!(principal instanceof CustomUserDetails)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        CustomUserDetails userDetails = (CustomUserDetails) principal;
+        Long medicoId = userDetails.getMedicoId();
+        if (medicoId == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Profilo medico non disponibile");
+        }
+        List<Sede> all = sedeRepository.findAll();
+        List<Sede> assigned = all.stream()
+                .filter(s -> medicoSedeRepository.medicoAssociatoASede(medicoId, s.getId()))
+                .toList();
+        return ResponseEntity.ok(assigned);
     }
 }

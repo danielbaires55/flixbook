@@ -23,9 +23,8 @@ import java.util.UUID;
 @Transactional
 public class AppuntamentoService implements InitializingBean {
 
-    private static final String INDIRIZZO_STUDIO = "Via del Benessere, 10 - 20121 Milano (MI)";
-    // Versione breve per SMS
-    private static final String INDIRIZZO_STUDIO_SHORT = "Via del Benessere 10, Milano";
+    private static final String INDIRIZZO_STUDIO = "Via del Benessere, 10 - 20121 Milano (MI)"; // fallback legacy
+    private static final String INDIRIZZO_STUDIO_SHORT = "Via del Benessere 10, Milano"; // fallback legacy
 
     @Autowired
     private AppuntamentoRepository appuntamentoRepository;
@@ -74,6 +73,12 @@ public class AppuntamentoService implements InitializingBean {
                 .ifPresentOrElse(s -> {
                     if (s.getStato() != SlotStato.DISPONIBILE) {
                         throw new IllegalStateException("Lo slot selezionato non è disponibile.");
+                    }
+                    // Prestazioni-per-blocco: se il blocco limita le prestazioni, la richiesta deve essere compatibile
+                    if (s.getBloccoOrario() != null && s.getBloccoOrario().getPrestazioneIds() != null && !s.getBloccoOrario().getPrestazioneIds().isEmpty()) {
+                        if (!s.getBloccoOrario().getPrestazioneIds().contains(prestazioneId)) {
+                            throw new IllegalStateException("La prestazione selezionata non è disponibile in questo intervallo orario.");
+                        }
                     }
                 }, () -> {
                     // Se lo schema è migrato e i blocchi generano slot, l'assenza indica indisponibilità reale
@@ -217,11 +222,11 @@ public class AppuntamentoService implements InitializingBean {
     }
     
     public List<Appuntamento> findAppuntamentiByPazienteEmail(String pazienteEmail) {
-        return appuntamentoRepository.findByPazienteEmail(pazienteEmail);
+        return appuntamentoRepository.findByPazienteEmailWithDetails(pazienteEmail);
     }
 
     public List<Appuntamento> findAppuntamentiByMedicoId(Long medicoId) {
-        return appuntamentoRepository.findAppuntamentiByMedicoId(medicoId);
+        return appuntamentoRepository.findAppuntamentiByMedicoIdWithDetails(medicoId);
     }
 
     @Override
@@ -265,7 +270,7 @@ public class AppuntamentoService implements InitializingBean {
                 if (app.getTipoAppuntamento() == TipoAppuntamento.virtuale && app.getLinkVideocall() != null) {
                     corpoBuilder.append("- Videocall: ").append(app.getLinkVideocall()).append("\n\n");
                 } else if (app.getTipoAppuntamento() == TipoAppuntamento.fisico) {
-                    corpoBuilder.append("- Indirizzo: ").append(INDIRIZZO_STUDIO).append("\n\n");
+                    corpoBuilder.append("- Indirizzo: ").append(formatIndirizzo(app, false)).append("\n\n");
                 } else {
                     corpoBuilder.append("\n");
                 }
@@ -287,7 +292,7 @@ public class AppuntamentoService implements InitializingBean {
                     if (app.getTipoAppuntamento() == TipoAppuntamento.virtuale && app.getLinkVideocall() != null) {
                         corpoSmsBuilder.append(" VC: ").append(app.getLinkVideocall());
                     } else if (app.getTipoAppuntamento() == TipoAppuntamento.fisico) {
-                        corpoSmsBuilder.append(" Ind: ").append(INDIRIZZO_STUDIO_SHORT);
+                        corpoSmsBuilder.append(" Ind: ").append(formatIndirizzo(app, true));
                     }
                     String corpoSms = corpoSmsBuilder.toString();
                     smsService.sendSms(numeroTelefono, corpoSms);
@@ -332,7 +337,7 @@ public class AppuntamentoService implements InitializingBean {
         if (appuntamento.getTipoAppuntamento() == TipoAppuntamento.virtuale) {
             corpo += "Link per la videocall:\n" + appuntamento.getLinkVideocall() + "\n\n";
         } else if (appuntamento.getTipoAppuntamento() == TipoAppuntamento.fisico) {
-            corpo += "Presentarsi in: " + INDIRIZZO_STUDIO + "\n\n";
+            corpo += "Presentarsi in: " + formatIndirizzo(appuntamento, false) + "\n\n";
         }
         corpo += "Cordiali saluti,\nIl team di Flixbook";
         emailService.sendEmail(paziente.getEmail(), oggetto, corpo);
@@ -348,10 +353,47 @@ public class AppuntamentoService implements InitializingBean {
             if (appuntamento.getTipoAppuntamento() == TipoAppuntamento.virtuale && appuntamento.getLinkVideocall() != null) {
                 dettagliSmsBuilder.append(" VC: ").append(appuntamento.getLinkVideocall());
             } else if (appuntamento.getTipoAppuntamento() == TipoAppuntamento.fisico) {
-                dettagliSmsBuilder.append(" Ind: ").append(INDIRIZZO_STUDIO_SHORT);
+                dettagliSmsBuilder.append(" Ind: ").append(formatIndirizzo(appuntamento, true));
             }
             String dettagliSms = dettagliSmsBuilder.toString();
             smsService.sendConfirmationSms(numeroTelefono, dettagliSms);
         }
+    }
+
+    private String formatIndirizzo(Appuntamento app, boolean shortForm) {
+        try {
+            if (app.getSlot() != null && app.getSlot().getBloccoOrario() != null && app.getSlot().getBloccoOrario().getSede() != null) {
+                var s = app.getSlot().getBloccoOrario().getSede();
+                if (shortForm) {
+                    StringBuilder sb = new StringBuilder();
+                    if (s.getIndirizzo() != null && !s.getIndirizzo().isBlank()) sb.append(s.getIndirizzo());
+                    if (s.getCitta() != null && !s.getCitta().isBlank()) {
+                        if (!sb.isEmpty()) sb.append(", ");
+                        sb.append(s.getCitta());
+                    }
+                    return sb.isEmpty() ? INDIRIZZO_STUDIO_SHORT : sb.toString();
+                } else {
+                    String cap = s.getCap();
+                    String citta = s.getCitta();
+                    String prov = s.getProvincia();
+                    String indir = s.getIndirizzo();
+                    StringBuilder sb = new StringBuilder();
+                    if (indir != null && !indir.isBlank()) sb.append(indir);
+                    if (cap != null && !cap.isBlank()) {
+                        if (!sb.isEmpty()) sb.append(" - ");
+                        sb.append(cap);
+                    }
+                    if (citta != null && !citta.isBlank()) {
+                        if (!sb.isEmpty()) sb.append(" ");
+                        sb.append(citta);
+                    }
+                    if (prov != null && !prov.isBlank()) {
+                        if (!sb.isEmpty()) sb.append(" (").append(prov).append(")");
+                    }
+                    return sb.isEmpty() ? INDIRIZZO_STUDIO : sb.toString();
+                }
+            }
+        } catch (Exception ignored) {}
+        return shortForm ? INDIRIZZO_STUDIO_SHORT : INDIRIZZO_STUDIO;
     }
 }

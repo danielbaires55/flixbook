@@ -114,6 +114,13 @@ const NavBar: FC<NavBarProps> = ({ onSpecialitaClick, onMediciClick, onContattiC
       <Link to="/medico-dashboard" className={`nav-link-button${isActive('/medico-dashboard')}`} onClick={() => setIsMobileMenuOpen(false)}>Dashboard</Link>
       <Link to="/medico/create-blocco-orario" className={`nav-link-button${isActive('/medico/create-blocco-orario')}`} onClick={() => setIsMobileMenuOpen(false)}>Gestisci Orari</Link>
       <Link to="/medico/profilo" className={`nav-link-button${isActive('/medico/profilo')}`} onClick={() => setIsMobileMenuOpen(false)}>Profilo</Link>
+      {user?.role === 'ROLE_ADMIN' && (
+        <>
+          <Link to="/admin/medici" className={`nav-link-button${isActive('/admin/medici')}`} onClick={() => setIsMobileMenuOpen(false)}>Admin · Medici</Link>
+          <Link to="/admin/sedi" className={`nav-link-button${isActive('/admin/sedi')}`} onClick={() => setIsMobileMenuOpen(false)}>Admin · Sedi</Link>
+          <Link to="/admin/ops" className={`nav-link-button${isActive('/admin/ops')}`} onClick={() => setIsMobileMenuOpen(false)}>Admin · Ops</Link>
+        </>
+      )}
     </>
   );
 
@@ -200,6 +207,14 @@ const NavBar: FC<NavBarProps> = ({ onSpecialitaClick, onMediciClick, onContattiC
     navLinksToShow = medicoLinks;
   } else if (user?.role === 'ROLE_PAZIENTE') {
     navLinksToShow = pazienteLinks;
+  } else if (user?.role === 'ROLE_ADMIN') {
+    navLinksToShow = (
+      <>
+  <Link to="/admin/medici" className={`nav-link-button${isActive('/admin/medici')}`} onClick={() => setIsMobileMenuOpen(false)}>Admin · Medici</Link>
+  <Link to="/admin/sedi" className={`nav-link-button${isActive('/admin/sedi')}`} onClick={() => setIsMobileMenuOpen(false)}>Admin · Sedi</Link>
+  <Link to="/admin/ops" className={`nav-link-button${isActive('/admin/ops')}`} onClick={() => setIsMobileMenuOpen(false)}>Admin · Ops</Link>
+      </>
+    );
   } else {
     // Fallback per utenti non loggati ma non sulla homepage
     navLinksToShow = (
