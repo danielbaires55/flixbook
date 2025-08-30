@@ -53,6 +53,7 @@ interface Appuntamento {
     privacyConsenso?: boolean;
 }
 interface DocItem { id: number; originalName: string }
+interface SlotLite { data: string; oraInizio: string | number; slotId?: number; sedeId?: number; sedeNome?: string }
 
 const API_BASE_URL = 'http://localhost:8080/api';
 const SERVER_BASE_URL = API_BASE_URL.replace(/\/api$/, '');
@@ -95,6 +96,16 @@ const MedicoDashboard = () => {
     const [docTargetApp, setDocTargetApp] = useState<Appuntamento | null>(null);
     const [docList, setDocList] = useState<DocItem[]>([]);
     const [docLoading, setDocLoading] = useState(false);
+    // Reschedule modal
+    const [resModalOpen, setResModalOpen] = useState(false);
+    const [resTargetApp, setResTargetApp] = useState<Appuntamento | null>(null);
+    const [resAllSlots, setResAllSlots] = useState<SlotLite[]>([]);
+    const [resSlots, setResSlots] = useState<SlotLite[]>([]);
+    const [resLoading, setResLoading] = useState(false);
+    const [resError, setResError] = useState<string | null>(null);
+    const [resSuccessOpen, setResSuccessOpen] = useState(false);
+    const [resSelectedSedeId, setResSelectedSedeId] = useState<number | ''>('');
+    const [resSediOptions, setResSediOptions] = useState<Array<{ id?: number; nome?: string }>>([]);
 
     useEffect(() => {
         if (!user || !user.medicoId) { setLoading(false); return; }
@@ -255,6 +266,78 @@ const MedicoDashboard = () => {
         }
     };
 
+    const openReschedule = async (app: Appuntamento) => {
+        if (!user) return;
+        setResTargetApp(app);
+        setResModalOpen(true);
+        setResLoading(true);
+        setResError(null);
+    setResAllSlots([]);
+    setResSlots([]);
+    setResSediOptions([]);
+    setResSelectedSedeId(app.tipoAppuntamento === 'fisico' ? (app.sedeId ?? '') : '');
+        try {
+            const params: Record<string, string | number> = {
+                prestazioneId: app.prestazione.id,
+                medicoId: app.medico.id,
+                limit: 30,
+                fromDate: new Date().toISOString().slice(0,10),
+            };
+            const { data } = await axios.get<SlotLite[]>(`${API_BASE_URL}/slots/prossimi-disponibili`, { params });
+            const now = new Date();
+            const toIsoTime = (t: string | number) => {
+                if (typeof t === 'number') return `${t.toString().padStart(2,'0')}:00:00`;
+                const s = String(t);
+                return /^\d{2}:\d{2}$/.test(s) ? `${s}:00` : s; // accept HH:mm or HH:mm:ss
+            };
+            const filtered = data.filter(s => s.slotId).filter(s => {
+                const dt = new Date(`${s.data}T${toIsoTime(s.oraInizio)}`);
+                return dt.getTime() > now.getTime();
+            });
+            setResAllSlots(filtered);
+            const sediMap = new Map<number, string>();
+            for (const s of filtered) {
+                if (typeof s.sedeId === 'number') sediMap.set(s.sedeId, s.sedeNome || 'Sede');
+            }
+            setResSediOptions(Array.from(sediMap.entries()).map(([id, nome]) => ({ id, nome })));
+            if (app.tipoAppuntamento === 'fisico' && app.sedeId) setResSlots(filtered.filter(s => s.sedeId === app.sedeId));
+            else setResSlots(filtered);
+        } catch (e: unknown) {
+            const msg = (e as { response?: { data?: unknown } })?.response?.data;
+            setResError(typeof msg === 'string' ? msg : 'Impossibile caricare le disponibilità.');
+        } finally {
+            setResLoading(false);
+        }
+    };
+    const applySedeFilter = (sedeId: number | '') => {
+        setResSelectedSedeId(sedeId);
+        if (sedeId === '') { setResSlots(resAllSlots); return; }
+        setResSlots(resAllSlots.filter(s => s.sedeId === sedeId));
+    };
+    const doReschedule = async (slotId: number) => {
+        if (!user || !resTargetApp) return;
+        try {
+            await axios.put(`${API_BASE_URL}/appuntamenti/${resTargetApp.id}/sposta`, { slotId }, { headers: { Authorization: `Bearer ${user.token}` } });
+            // Refresh appointments list
+            const medicoId = user.medicoId;
+            const { data } = await axios.get(`${API_BASE_URL}/appuntamenti/medico/${medicoId}`, { headers: { Authorization: `Bearer ${user.token}` } });
+            setAppuntamenti(data);
+            setResModalOpen(false);
+            setResTargetApp(null);
+            setResSuccessOpen(true);
+        } catch (e: unknown) {
+            const msg = (e as { response?: { data?: unknown } })?.response?.data;
+            const raw = typeof msg === 'string' ? msg : 'Impossibile spostare: lo slot potrebbe non essere più disponibile.';
+            let friendly = raw;
+            if (/massimo di 2 volte/i.test(raw) || /numero massimo di 2/i.test(raw)) {
+                friendly = 'Il paziente ha raggiunto il numero massimo di 2 spostamenti per questo appuntamento.';
+            } else if (/24\s*ore/i.test(raw) || /24h/i.test(raw)) {
+                friendly = "Non è possibile spostare l'appuntamento nelle 24 ore precedenti all'orario previsto (regola lato paziente).";
+            }
+            setResError(friendly);
+        }
+    };
+
     const openPatientInfo = (p: Paziente) => {
         setPatientTarget(p);
         setPatientModalOpen(true);
@@ -402,6 +485,9 @@ const MedicoDashboard = () => {
                                                                 </span>
                                                             )}
                                                             <button className="btn btn-danger btn-sm" onClick={() => handleAnnullaAppuntamento(app.id)}>Annulla</button>
+                                                            {app.stato === 'CONFERMATO' && (
+                                                                <button className="btn btn-outline-primary btn-sm" onClick={() => openReschedule(app)}>Sposta</button>
+                                                            )}
                                                         </div>
                                                     </li>
                                                 ))}
@@ -767,6 +853,67 @@ const MedicoDashboard = () => {
                                 onClose={() => setPatientModalOpen(false)}
                                 paziente={patientTarget}
                             />
+                            {/* Modal spostamento appuntamento */}
+                            <Modal show={resModalOpen} onHide={() => setResModalOpen(false)} centered>
+                                <Modal.Header closeButton>
+                                    <Modal.Title>Sposta appuntamento</Modal.Title>
+                                </Modal.Header>
+                                <Modal.Body>
+                                    {(() => { /* helper scope for formatting */ return null; })()}
+                                    {resTargetApp?.tipoAppuntamento === 'fisico' && (
+                                        <div className="mb-3">
+                                            <label className="form-label">Sede</label>
+                                            <select className="form-select" value={resSelectedSedeId === '' ? '' : resSelectedSedeId}
+                                                onChange={(e) => applySedeFilter(e.target.value ? Number(e.target.value) : '')}>
+                                                <option value="">Tutte le sedi</option>
+                                                {resSediOptions.map(s => (
+                                                    <option key={s.id} value={s.id}>{s.nome || `Sede ${s.id}`}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    )}
+                                     {resLoading ? <div>Caricamento disponibilità…</div> : resError ? <div className="alert alert-danger">{resError}</div> : (
+                                        resSlots.length === 0 ? <div className="text-muted">Nessuno slot disponibile.</div> : (
+                                            <ul className="list-group">
+                                                {resSlots.map((s, idx) => (
+                                                    <li key={idx} className="list-group-item d-flex justify-content-between align-items-center">
+                                                        <div>
+                                                            {(() => {
+                                                                const fmtIso = (t: string | number) => {
+                                                                    if (typeof t === 'number') return `${t.toString().padStart(2,'0')}:00:00`;
+                                                                    const ss = String(t);
+                                                                    return /^\d{2}:\d{2}$/.test(ss) ? `${ss}:00` : ss;
+                                                                };
+                                                                const iso = fmtIso(s.oraInizio);
+                                                                return (
+                                                                    <div><strong>{new Date(`${s.data}T${iso}`).toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' })}</strong> alle <strong>{iso.slice(0,5)}</strong></div>
+                                                                );
+                                                            })()}
+                                                            {s.sedeNome && <div className="small text-muted">Sede: {s.sedeNome}</div>}
+                                                        </div>
+                                                        <Button size="sm" onClick={() => s.slotId && doReschedule(s.slotId)} disabled={!s.slotId}>Scegli</Button>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        )
+                                    )}
+                                </Modal.Body>
+                                <Modal.Footer>
+                                    <Button variant="secondary" onClick={() => setResModalOpen(false)}>Chiudi</Button>
+                                </Modal.Footer>
+                            </Modal>
+                            {/* Modal successo spostamento */}
+                            <Modal show={resSuccessOpen} onHide={() => setResSuccessOpen(false)} centered>
+                                <Modal.Header closeButton>
+                                    <Modal.Title>Appuntamento spostato</Modal.Title>
+                                </Modal.Header>
+                                <Modal.Body>
+                                    L'appuntamento è stato spostato con successo.
+                                </Modal.Body>
+                                <Modal.Footer>
+                                    <Button variant="primary" onClick={() => setResSuccessOpen(false)}>OK</Button>
+                                </Modal.Footer>
+                            </Modal>
         </div>
     );
 };

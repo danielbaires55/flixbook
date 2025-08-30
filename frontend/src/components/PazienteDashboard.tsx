@@ -27,6 +27,8 @@ interface Appuntamento {
 }
 interface PazienteProfile { nome: string; cognome: string; email: string; }
 interface DocItem { id: number; originalName: string }
+// Slot shape used by /api/slots/prossimi-disponibili (subset)
+interface SlotLite { data: string; oraInizio: string | number; slotId?: number; sedeId?: number; sedeNome?: string }
 
 const API_BASE_URL = "http://localhost:8080/api";
 const SERVER_BASE_URL = 'http://localhost:8080';
@@ -46,6 +48,16 @@ const PazienteDashboard = () => {
   const [docFile, setDocFile] = useState<File | null>(null);
   const [docPrivacy, setDocPrivacy] = useState<boolean>(false);
   const [docLoading, setDocLoading] = useState<boolean>(false);
+  // Reschedule modal
+  const [resModalOpen, setResModalOpen] = useState(false);
+  const [resTargetApp, setResTargetApp] = useState<Appuntamento | null>(null);
+  const [resAllSlots, setResAllSlots] = useState<SlotLite[]>([]);
+  const [resSlots, setResSlots] = useState<SlotLite[]>([]);
+  const [resLoading, setResLoading] = useState(false);
+  const [resError, setResError] = useState<string | null>(null);
+  const [resSelectedSedeId, setResSelectedSedeId] = useState<number | ''>('');
+  const [resSediOptions, setResSediOptions] = useState<Array<{ id?: number; nome?: string }>>([]);
+  const [resSuccessOpen, setResSuccessOpen] = useState(false);
 
   // Storico modal (past appointments)
   const [storicoOpen, setStoricoOpen] = useState(false);
@@ -103,6 +115,89 @@ const PazienteDashboard = () => {
       console.error("Errore nell'annullamento dell'appuntamento", err);
       alert("Si è verificato un errore durante l'annullamento. Riprova.");
     }
+  };
+
+  const openReschedule = async (app: Appuntamento) => {
+    setResTargetApp(app);
+    setResModalOpen(true);
+    setResLoading(true);
+    setResError(null);
+    setResAllSlots([]);
+    setResSlots([]);
+    setResSediOptions([]);
+    setResSelectedSedeId(app.tipoAppuntamento === 'fisico' ? (app.sedeId ?? '') : '');
+    try {
+      if (!user) return;
+      // Carica i prossimi slot del MEDICO dell'appuntamento per la STESSA prestazione
+      const params: Record<string, string | number> = {
+        prestazioneId: app.prestazione.id,
+        medicoId: app.medico.id,
+        limit: 30,
+        fromDate: new Date().toISOString().slice(0,10),
+      };
+      const { data } = await axios.get<SlotLite[]>(`${API_BASE_URL}/slots/prossimi-disponibili`, { params });
+      // Filtra slot con slotId disponibile (persisted) e data>oggi e orario dopo adesso se oggi
+      const now = new Date();
+      const toIsoTime = (t: string | number) => {
+        if (typeof t === 'number') return `${t.toString().padStart(2,'0')}:00:00`;
+        const s = String(t);
+        return /^\d{2}:\d{2}$/.test(s) ? `${s}:00` : s; // assume HH:mm or HH:mm:ss
+      };
+      const future = data.filter(s => s.slotId).filter(s => {
+        const dt = new Date(`${s.data}T${toIsoTime(s.oraInizio)}`);
+        return dt.getTime() > now.getTime();
+      });
+      setResAllSlots(future);
+      // Build sedi options from slots
+      const sediMap = new Map<number, string>();
+      for (const s of future) {
+        if (typeof s.sedeId === 'number') {
+          sediMap.set(s.sedeId, s.sedeNome || 'Sede');
+        }
+      }
+      const sediOpts = Array.from(sediMap.entries()).map(([id, nome]) => ({ id, nome }));
+      setResSediOptions(sediOpts);
+      // Apply sede filter for physical visits by default
+      if (app.tipoAppuntamento === 'fisico' && app.sedeId) {
+        setResSlots(future.filter((s) => s.sedeId === app.sedeId));
+      } else {
+        setResSlots(future);
+      }
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: unknown } })?.response?.data;
+      setResError(typeof msg === 'string' ? msg : 'Impossibile caricare le disponibilità.');
+    } finally {
+      setResLoading(false);
+    }
+  };
+
+  const doReschedule = async (slotId: number) => {
+    if (!user || !resTargetApp) return;
+    try {
+      await axios.put(`${API_BASE_URL}/appuntamenti/${resTargetApp.id}/sposta`, { slotId }, { headers: { Authorization: `Bearer ${user.token}` } });
+      // Aggiorna stato UI: ricarica lista appuntamenti dal server per coerenza
+      const { data } = await axios.get(`${API_BASE_URL}/appuntamenti/paziente`, { headers: { Authorization: `Bearer ${user.token}` } });
+      setAppuntamenti(data);
+      setResModalOpen(false);
+      setResTargetApp(null);
+  setResSuccessOpen(true);
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: unknown } })?.response?.data;
+      const raw = typeof msg === 'string' ? msg : 'Impossibile spostare: verifica che lo slot sia ancora disponibile.';
+      let friendly = raw;
+      if (/massimo di 2 volte/i.test(raw) || /numero massimo di 2/i.test(raw)) {
+        friendly = 'Hai raggiunto il numero massimo di 2 spostamenti per questo appuntamento.';
+      } else if (/24\s*ore/i.test(raw) || /24h/i.test(raw)) {
+        friendly = "Non è possibile spostare l'appuntamento nelle 24 ore precedenti all'orario previsto.";
+      }
+      setResError(friendly);
+    }
+  };
+
+  const applySedeFilter = (sedeId: number | '') => {
+    setResSelectedSedeId(sedeId);
+  if (sedeId === '') { setResSlots(resAllSlots); return; }
+  setResSlots(resAllSlots.filter((s) => s.sedeId === sedeId));
   };
 
   const handleLogout = () => {
@@ -277,6 +372,11 @@ const PazienteDashboard = () => {
                             Annulla
                           </button>
                         )}
+                        {app.stato === "CONFERMATO" && (
+                          <button className="btn btn-outline-primary btn-sm" onClick={() => openReschedule(app)}>
+                            Sposta
+                          </button>
+                        )}
                       </div>
                     </li>
                   ))}
@@ -317,6 +417,32 @@ const PazienteDashboard = () => {
         loading={docLoading}
         setPrivacy={setDocPrivacy}
       />
+
+      {/* Modal spostamento appuntamento */}
+      <RescheduleModal
+        open={resModalOpen}
+        onClose={() => setResModalOpen(false)}
+        loading={resLoading}
+        error={resError}
+  slots={resSlots}
+  isFisico={resTargetApp?.tipoAppuntamento === 'fisico'}
+  selectedSedeId={resSelectedSedeId}
+  sediOptions={resSediOptions}
+  onChangeSede={applySedeFilter}
+        doReschedule={doReschedule}
+      />
+      {/* Modal successo spostamento */}
+      <Modal show={resSuccessOpen} onHide={() => setResSuccessOpen(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Appuntamento spostato</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          L'appuntamento è stato spostato con successo.
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="primary" onClick={() => setResSuccessOpen(false)}>OK</Button>
+        </Modal.Footer>
+      </Modal>
     </div>
   );
 };
@@ -362,6 +488,54 @@ const DocsModal = ({ open, onClose, app, list, setFile, upload, del, loading, se
 };
 
 export default PazienteDashboard;
+// Modal Sposta (paziente)
+const RescheduleModal = ({ open, onClose, loading, error, slots, isFisico, selectedSedeId, sediOptions, onChangeSede, doReschedule }:
+  { open: boolean; onClose: () => void; loading: boolean; error: string | null; slots: SlotLite[]; isFisico?: boolean; selectedSedeId: number | ''; sediOptions: Array<{id?: number; nome?: string}>; onChangeSede: (id: number | '') => void; doReschedule: (slotId: number) => void }) => {
+  const fmtIso = (t: string | number) => {
+    if (typeof t === 'number') return `${t.toString().padStart(2,'0')}:00:00`;
+    const s = String(t);
+    return /^\d{2}:\d{2}$/.test(s) ? `${s}:00` : s; // HH:mm -> HH:mm:ss, or already HH:mm:ss
+  };
+  return (
+    <Modal show={open} onHide={onClose} centered>
+      <Modal.Header closeButton>
+        <Modal.Title>Sposta appuntamento</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        {isFisico && (
+          <div className="mb-3">
+            <label className="form-label">Sede</label>
+            <select className="form-select" value={selectedSedeId === '' ? '' : selectedSedeId}
+              onChange={(e) => onChangeSede(e.target.value ? Number(e.target.value) : '')}>
+              <option value="">Tutte le sedi</option>
+              {sediOptions.map(s => (
+                <option key={s.id} value={s.id}>{s.nome || `Sede ${s.id}`}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        {loading ? <div>Caricamento disponibilità…</div> : error ? <div className="alert alert-danger">{error}</div> : (
+          slots.length === 0 ? <div className="text-muted">Nessuno slot disponibile.</div> : (
+            <ul className="list-group">
+              {slots.map((s, idx) => (
+        <li key={idx} className="list-group-item d-flex justify-content-between align-items-center">
+                  <div>
+                    <div><strong>{new Date(`${s.data}T${fmtIso(s.oraInizio)}`).toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' })}</strong> alle <strong>{fmtIso(s.oraInizio).slice(0,5)}</strong></div>
+                    {s.sedeNome && <div className="small text-muted">Sede: {s.sedeNome}</div>}
+                  </div>
+                  <Button size="sm" onClick={() => s.slotId && doReschedule(s.slotId)} disabled={!s.slotId}>Scegli</Button>
+                </li>
+              ))}
+            </ul>
+          )
+        )}
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="secondary" onClick={onClose}>Chiudi</Button>
+      </Modal.Footer>
+    </Modal>
+  );
+};
 // Render modal alongside component (export stays default above)
 // Note: Inlined for simplicity; could be separated later
 

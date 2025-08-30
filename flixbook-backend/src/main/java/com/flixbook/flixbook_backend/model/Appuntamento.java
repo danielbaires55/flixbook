@@ -67,6 +67,11 @@ public class Appuntamento {
     @Builder.Default
     private boolean feedbackInviato = false;
 
+    // Numero di spostamenti effettuati dal paziente su questo appuntamento
+    @Column(name = "reschedule_count", nullable = false)
+    @Builder.Default
+    private int rescheduleCount = 0;
+
     // Collegamento facoltativo al nuovo Slot persistito (1:1)
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "slot_id")

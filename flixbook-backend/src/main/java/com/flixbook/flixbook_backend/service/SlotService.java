@@ -146,12 +146,14 @@ public class SlotService {
         return slotDisponibili;
     }
 
+    @Transactional
     public List<Map<String, Object>> findProssimiSlotDisponibili(Long prestazioneId, Long medicoId, Long sedeId, Integer limit,
                                                                  LocalDate fromDate, LocalDate toDate,
                                                                  Integer fromHour, Integer toHour) {
         var prest = prestazioneRepository.findById(prestazioneId)
             .orElseThrow(() -> new IllegalArgumentException("Prestazione non trovata."));
         boolean isVirtual = prest.getTipoPrestazione() == com.flixbook.flixbook_backend.model.TipoPrestazione.virtuale;
+        int durata = prest.getDurataMinuti();
         List<Map<String, Object>> tuttiSlot = new ArrayList<>();
         LocalDate oggi = LocalDate.now();
         final int NUMERO_SLOT_DA_RESTITUIRE = (limit != null && limit > 0) ? limit : 15;
@@ -192,14 +194,37 @@ public class SlotService {
             // Apply hour window if provided
             if (fromHour != null && oraInizio.getHour() < fromHour) continue;
             if (toHour != null && oraInizio.getHour() > toHour) continue;
+                    final LocalDate giorno = giornoCorrente; // make effectively final for lambdas
                     Map<String, Object> slotMap = new HashMap<>();
-                    slotMap.put("data", giornoCorrente);
+                    slotMap.put("data", giorno);
                     slotMap.put("oraInizio", oraInizio);
                     slotMap.put("medicoId", medico.getId());
                     slotMap.put("medicoNome", medico.getNome());
                     slotMap.put("medicoCognome", medico.getCognome());
+                    // Ensure a persisted Slot exists for medico+start; create one if covering blocco exists
+                    LocalDateTime start = LocalDateTime.of(giorno, oraInizio);
+                    var persisted = slotRepository.findByMedico_IdAndDataEOraInizio(medico.getId(), start)
+                        .or(() -> {
+                            // find a covering blocco and create the slot lazily
+                            return bloccoOrarioRepository.findByMedicoIdAndData(medico.getId(), giorno).stream()
+                                    .filter(b -> !start.isBefore(LocalDateTime.of(b.getData(), b.getOraInizio()))
+                                              && start.isBefore(LocalDateTime.of(b.getData(), b.getOraFine())))
+                                    .findFirst()
+                                    .map(b -> {
+                                        try {
+                                            Slot s = new Slot();
+                                            s.setMedico(medico);
+                                            s.setBloccoOrario(b);
+                                            s.setDataEOraInizio(start);
+                                            s.setDataEOraFine(start.plusMinutes(durata));
+                                            s.setStato(SlotStato.DISPONIBILE);
+                                            return slotRepository.save(s);
+                                        } catch (Exception e) { return null; }
+                                    });
+                        });
+                    persisted.ifPresent(s -> { if (s != null) slotMap.put("slotId", s.getId()); });
                     // Resolve sede info for this slot
-                    var sedeInfo = resolveSedeForSlot(medico.getId(), giornoCorrente, oraInizio);
+                    var sedeInfo = resolveSedeForSlot(medico.getId(), giorno, oraInizio);
                     sedeInfo.ifPresent(si -> {
                         slotMap.put("sedeId", si.id);
                         slotMap.put("sedeNome", si.nome);
@@ -224,10 +249,12 @@ public class SlotService {
             : tuttiSlot.subList(0, NUMERO_SLOT_DA_RESTITUIRE);
     }
 
+    @Transactional
     public List<Map<String, Object>> findSlotsForDay(Long prestazioneId, Long medicoId, Long sedeId, LocalDate data) {
         var prest = prestazioneRepository.findById(prestazioneId)
             .orElseThrow(() -> new IllegalArgumentException("Prestazione non trovata."));
         boolean isVirtual = prest.getTipoPrestazione() == com.flixbook.flixbook_backend.model.TipoPrestazione.virtuale;
+        int durata = prest.getDurataMinuti();
         List<Map<String, Object>> slotTrovati = new ArrayList<>();
         
         List<Medico> mediciDaControllare;
@@ -253,6 +280,27 @@ public class SlotService {
                 slotMap.put("medicoId", medico.getId());
                 slotMap.put("medicoNome", medico.getNome());
                 slotMap.put("medicoCognome", medico.getCognome());
+                // Ensure a persisted Slot exists; create if a covering blocco is found
+                LocalDateTime start = LocalDateTime.of(data, oraInizio);
+                var persisted = slotRepository.findByMedico_IdAndDataEOraInizio(medico.getId(), start)
+                    .or(() -> {
+                        return bloccoOrarioRepository.findByMedicoIdAndData(medico.getId(), data).stream()
+                                .filter(b -> !start.isBefore(LocalDateTime.of(b.getData(), b.getOraInizio()))
+                                          && start.isBefore(LocalDateTime.of(b.getData(), b.getOraFine())))
+                                .findFirst()
+                                .map(b -> {
+                                    try {
+                                        Slot s = new Slot();
+                                        s.setMedico(medico);
+                                        s.setBloccoOrario(b);
+                                        s.setDataEOraInizio(start);
+                                        s.setDataEOraFine(start.plusMinutes(durata));
+                                        s.setStato(SlotStato.DISPONIBILE);
+                                        return slotRepository.save(s);
+                                    } catch (Exception e) { return null; }
+                                });
+                    });
+                persisted.ifPresent(s -> { if (s != null) slotMap.put("slotId", s.getId()); });
                 var sedeInfo = resolveSedeForSlot(medico.getId(), data, oraInizio);
                 sedeInfo.ifPresent(si -> {
                     slotMap.put("sedeId", si.id);
