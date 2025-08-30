@@ -7,7 +7,7 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
+node_modules/
 dist
 dist-ssr
 *.local
@@ -22,3 +22,42 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Backend (Maven)
+target/
+flixbook-backend/target/
+*.jar
+*.war
+spring.log
+
+# File di upload (non versionare contenuti utente)
+/uploads/
+
+# Env files (mantieni solo esempi)
+.env
+.env.*
+frontend/.env
+frontend/.env.*
+!.env.example
+!frontend/.env.example
+
+# Frontend caches/build meta
+.eslintcache
+frontend/.eslintcache
+**/.vite
+*.tsbuildinfo
+coverage/
+
+# IDE/Build metadata
+*.iml
+.ipr
+*.iws
+.classpath
+.project
+.settings/
+
+# Maven wrapper artifacts
+**/.mvn/wrapper/maven-wrapper.jar
+
+# Additional build folders from IDEs
+**/build/
