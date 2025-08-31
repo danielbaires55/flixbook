@@ -71,6 +71,8 @@ public class SecurityConfig {
                                 "/api/prestazioni/bySpecialita/**",
                                 "/api/medici/info/**",
                                 "/api/medici/byPrestazione/**",
+                                "/api/medici/withRatings",
+                                "/api/medici/byPrestazione/*/withRatings",
                                 "/api/sedi/**",
                                 "/prof_img/**",
                                 "/api/medici",

@@ -8,6 +8,7 @@ import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
@@ -78,4 +79,14 @@ public interface AppuntamentoRepository extends JpaRepository<Appuntamento, Long
         @Param("start") LocalDateTime start, 
         @Param("end") LocalDateTime end
     );
+
+       // Conteggio appuntamenti attivi (CONFERMATO) nel futuro per un medico
+       @Query("SELECT COUNT(a) FROM Appuntamento a WHERE a.medico.id = :medicoId AND a.stato = com.flixbook.flixbook_backend.model.StatoAppuntamento.CONFERMATO AND a.dataEOraInizio > :now")
+       long countAttiviFuturiByMedicoId(@Param("medicoId") Long medicoId, @Param("now") LocalDateTime now);
+
+       @Query("SELECT a.id FROM Appuntamento a WHERE a.medico.id = :medicoId")
+       List<Long> findIdsByMedicoId(@Param("medicoId") Long medicoId);
+
+       @Modifying
+       long deleteByMedico_Id(Long medicoId);
 }

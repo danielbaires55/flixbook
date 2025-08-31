@@ -29,6 +29,8 @@ interface Medico {
   nome: string;
   cognome: string;
   imgProfUrl?: string;
+  avgRating?: number | null;
+  ratingCount?: number;
 }
 
 interface Sede { id: number; nome: string; lat?: number; lng?: number }
@@ -102,6 +104,7 @@ const BookingCalendar: React.FC = () => {
   // Help UI states
   const [showHelpToast, setShowHelpToast] = useState<boolean>(false);
   const [showHelpModal, setShowHelpModal] = useState<boolean>(false);
+  const [helpDontShowAgain, setHelpDontShowAgain] = useState<boolean>(false);
   // Conferma prenotazione
   const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
   const [pendingSlot, setPendingSlot] = useState<SlotDisponibile | null>(null);
@@ -290,7 +293,7 @@ const BookingCalendar: React.FC = () => {
       setSelectedMedicoId("");
 
       axios
-        .get<Medico[]>(`${API_BASE_URL}/medici/byPrestazione/${selectedPrestazioneId}`)
+        .get<Medico[]>(`${API_BASE_URL}/medici/byPrestazione/${selectedPrestazioneId}/withRatings`)
         .then((response) => {
           setMediciList(response.data);
         })
@@ -590,11 +593,15 @@ const BookingCalendar: React.FC = () => {
                     disabled={!selectedPrestazioneId}
                   >
                     <option value="">Tutti i medici disponibili</option>
-          {mediciList.map((m) => (
-                      <option key={m.id} value={m.id}>
-            Dott. {m.nome} {m.cognome}
-                      </option>
-                    ))}
+                    {mediciList.map((m) => {
+                      const r = m.avgRating ?? null;
+                      const stars = r ? ` (${"★".repeat(Math.round(r))}${"☆".repeat(5 - Math.round(r))} · ${m.ratingCount})` : " (nessuna valutazione)";
+                      return (
+                        <option key={m.id} value={m.id}>
+                          Dott. {m.nome} {m.cognome}{stars}
+                        </option>
+                      );
+                    })}
                   </select>
                   <div className="form-text">Lascia vuoto per vedere tutti i medici</div>
                 </div>
@@ -719,10 +726,10 @@ const BookingCalendar: React.FC = () => {
                 <div className="card mt-4">
                   <div className="card-header bg-white">
                     <div className="d-flex justify-content-between align-items-center" style={{gap: 12}}>
-                      <span className="fw-semibold">Prime visite disponibili (max 30)</span>
+          <span className="fw-semibold">Prime visite disponibili (max 30)</span>
             {selectedMedicoId && (
                         <small className="text-muted">
-              Filtrato per: Dott. {mediciList.find(m => m.id === parseInt(selectedMedicoId))?.nome} {mediciList.find(m => m.id === parseInt(selectedMedicoId))?.cognome}
+        {(() => { const mm = mediciList.find(m => m.id === parseInt(selectedMedicoId)); if (!mm) return ""; const r = mm.avgRating ?? null; const stars = r ? ` (${"★".repeat(Math.round(r))}${"☆".repeat(5 - Math.round(r))} · ${mm.ratingCount})` : " (nessuna valutazione)"; return `Filtrato per: Dott. ${mm.nome} ${mm.cognome}${stars}`; })()}
                         </small>
                       )}
                       {selectedDateToFilter && selectedDateFilter ? (
@@ -943,16 +950,50 @@ const BookingCalendar: React.FC = () => {
                 </Modal.Header>
                 <Modal.Body>
                   <ol className="mb-3">
-                    <li>Seleziona la <strong>specialità</strong> e poi la <strong>prestazione</strong>.</li>
-                    <li>(Opzionale) Scegli un <strong>medico</strong> specifico, oppure lascia "Tutti i medici".</li>
-                    <li>Usa <strong>Filtra per data</strong> per scegliere una <em>data</em> o un <em>intervallo</em>.
-                      I giorni in <span className="text-success">verde</span> indicano disponibilità per la <strong>prestazione</strong> scelta; se hai selezionato un <strong>medico</strong>, mostrano solo i giorni in cui quel medico ha disponibilità per quella prestazione.</li>
-                    <li>Seleziona un <strong>orario</strong> (mattina/pomeriggio/fascia). Con un filtro orario attivo compare un piccolo <strong>pallino</strong> nei giorni con disponibilità.</li>
-                    <li>Tra le <strong>prime visite</strong> elencate (max 30), clicca <strong>Prenota</strong>.</li>
+                    <li>
+                      Seleziona la <strong>specialità</strong> e poi la <strong>prestazione</strong>.
+                      Per le prestazioni <em>virtuali</em> il filtro sede è disattivato; per quelle <em>in presenza</em> puoi scegliere la <strong>sede</strong>.
+                    </li>
+                    <li>
+                      (Opzionale) Scegli un <strong>medico</strong> specifico. Accanto al nome vedi le <strong>stelle</strong> (media delle valutazioni) o la scritta “nessuna valutazione”.
+                    </li>
+                    <li>
+                      Premi <strong>Filtra per data</strong> per scegliere una <em>data</em> o un <em>intervallo</em>.
+                      I giorni in <span className="text-success">verde</span> hanno disponibilità; se imposti anche un filtro <strong>orario</strong>, vedrai un <strong>pallino</strong> nei giorni compatibili.
+                    </li>
+                    <li>
+                      (Opzionale) Filtra per <strong>orario</strong> (mattina, pomeriggio o fascia), oppure lascia “Tutto il giorno”.
+                    </li>
+                    <li>
+                      Seleziona una <strong>sede</strong> per le visite in presenza. Puoi usare “<em>Trova la sede più vicina a me</em>” e, se vuoi, impostarla come preferita.
+                    </li>
+                    <li>
+                      Scorri le <strong>prime visite</strong> elencate (max 30) e clicca <strong>Prenota</strong>; conferma nel riepilogo.
+                    </li>
                   </ol>
-                  <small className="text-muted">Suggerimento: lascia vuoto il medico per vedere più disponibilità.</small>
+                  <div className="text-muted small">
+                    Suggerimenti:
+                    <ul className="mt-1 mb-0">
+                      <li>Lascia il medico non selezionato per vedere più disponibilità.</li>
+                      <li>Per prenotare devi essere autenticato: se non lo sei, verrai indirizzato alla pagina di accesso.</li>
+                      <li>Dopo la prenotazione riceverai un’email di conferma con invito calendario (ICS) e link Google Calendar.</li>
+                      <li>Puoi <strong>spostare</strong> o <strong>annullare</strong> dalla tua Dashboard, rispettando le policy (max 2 spostamenti, non nelle 24h precedenti).</li>
+                    </ul>
+                  </div>
                 </Modal.Body>
-                <Modal.Footer>
+                <Modal.Footer className="d-flex justify-content-between align-items-center">
+                  <label className="form-check m-0 d-inline-flex align-items-center gap-2">
+                    <input
+                      type="checkbox"
+                      className="form-check-input"
+                      checked={helpDontShowAgain}
+                      onChange={(e) => {
+                        setHelpDontShowAgain(e.target.checked);
+                        try { localStorage.setItem('booking_help_seen', e.target.checked ? '1' : ''); } catch { /* ignore */ }
+                      }}
+                    />
+                    <span className="form-check-label">Non mostrare più</span>
+                  </label>
                   <Button variant="primary" onClick={() => setShowHelpModal(false)}>Ho capito</Button>
                 </Modal.Footer>
               </Modal>

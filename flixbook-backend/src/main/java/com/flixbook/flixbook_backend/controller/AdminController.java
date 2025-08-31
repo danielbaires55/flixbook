@@ -3,6 +3,7 @@ package com.flixbook.flixbook_backend.controller;
 import com.flixbook.flixbook_backend.model.*;
 import com.flixbook.flixbook_backend.repository.*;
 import com.flixbook.flixbook_backend.service.EmailService;
+import com.flixbook.flixbook_backend.service.AppuntamentoService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
@@ -29,6 +30,7 @@ public class AdminController {
     private final BloccoOrarioRepository bloccoOrarioRepository;
     private final EmailService emailService;
     private final JdbcTemplate jdbcTemplate;
+    private final AppuntamentoService appuntamentoService;
 
     public AdminController(MedicoRepository medicoRepository,
                            PasswordEncoder passwordEncoder,
@@ -42,7 +44,8 @@ public class AdminController {
                            SlotRepository slotRepository,
                            BloccoOrarioRepository bloccoOrarioRepository,
                            EmailService emailService,
-                           JdbcTemplate jdbcTemplate) {
+                           JdbcTemplate jdbcTemplate,
+                           AppuntamentoService appuntamentoService) {
         this.medicoRepository = medicoRepository;
         this.passwordEncoder = passwordEncoder;
         this.sedeRepository = sedeRepository;
@@ -56,6 +59,7 @@ public class AdminController {
         this.bloccoOrarioRepository = bloccoOrarioRepository;
         this.emailService = emailService;
         this.jdbcTemplate = jdbcTemplate;
+        this.appuntamentoService = appuntamentoService;
     }
 
     // -------------------- MEDICI --------------------
@@ -169,28 +173,95 @@ public class AdminController {
     @Transactional
     public ResponseEntity<?> deleteMedico(@PathVariable Long medicoId) {
         if (!medicoRepository.existsById(medicoId)) return ResponseEntity.notFound().build();
-        long appuntamenti = appuntamentoRepository.countByMedico_Id(medicoId);
-        long blocchi = bloccoOrarioRepository.countByMedicoId(medicoId);
-        long slotCount = slotRepository.countByMedico_Id(medicoId);
-        if (appuntamenti > 0 || blocchi > 0 || slotCount > 0) {
+
+        // Blocca eliminazione solo se esistono appuntamenti attivi nel futuro
+        long attiviFuturi = appuntamentoRepository.countAttiviFuturiByMedicoId(medicoId, java.time.LocalDateTime.now());
+        if (attiviFuturi > 0) {
             return ResponseEntity.status(409).body(Map.of(
-                    "error", "Impossibile eliminare: esistono ancora dati collegati",
-                    "appuntamenti", appuntamenti,
-                    "blocchiOrario", blocchi,
-                    "slot", slotCount
+                "error", "Impossibile eliminare: il medico ha appuntamenti attivi nel futuro",
+                "attiviFuturi", attiviFuturi
             ));
         }
-        // Elimina associazioni
-        medicoPrestazioneRepository.deleteByMedicoId(medicoId);
-        medicoSedeRepository.deleteByIdMedicoId(medicoId);
-    // Pulisci relazioni many-to-many collaboratore↔medico (tabella join)
+
+    // Raccogli conteggi prima della cancellazione
+    long totApp = appuntamentoRepository.countByMedico_Id(medicoId);
+    long totSlot = slotRepository.countByMedico_Id(medicoId);
+    long totBlocchi = bloccoOrarioRepository.countByMedicoId(medicoId);
+    int totAssocPrest = medicoPrestazioneRepository.findByMedicoId(medicoId).size();
+    int totAssocSedi = medicoSedeRepository.findByIdMedicoId(medicoId).size();
+    int totCollab = (int) collaboratoreRepository.findAll().stream()
+        .filter(c -> c.getMedico() != null && medicoId.equals(c.getMedico().getId())).count();
+    var appIds = appuntamentoRepository.findIdsByMedicoId(medicoId);
+    long totFeedback = 0L;
+    if (appIds != null && !appIds.isEmpty()) {
+        String qs = appIds.stream().map(id -> "?").reduce((a,b) -> a+","+b).orElse("?");
+        Long count = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM feedback WHERE appuntamento_id IN (" + qs + ")",
+            Long.class,
+            appIds.toArray()
+        );
+        totFeedback = count != null ? count : 0L;
+    }
+
+    // 1) Pulisci associazioni many-to-many
+    medicoPrestazioneRepository.deleteByMedicoId(medicoId);
+    medicoSedeRepository.deleteByIdMedicoId(medicoId);
     jdbcTemplate.update("DELETE FROM collaboratori_medici WHERE medico_id = ?", medicoId);
-        // Elimina collaboratori orfani del medico (se cascade non copre)
-        collaboratoreRepository.findAll().stream()
-                .filter(c -> c.getMedico() != null && medicoId.equals(c.getMedico().getId()))
-                .forEach(c -> collaboratoreRepository.deleteById(c.getId()));
-        medicoRepository.deleteById(medicoId);
-        return ResponseEntity.noContent().build();
+
+    // 2) Rimuovi collaboratori collegati a questo medico
+    collaboratoreRepository.findAll().stream()
+        .filter(c -> c.getMedico() != null && medicoId.equals(c.getMedico().getId()))
+        .forEach(c -> collaboratoreRepository.deleteById(c.getId()));
+
+    // 3) Cancella appuntamenti e relativi feedback
+    if (appIds != null && !appIds.isEmpty()) {
+        String qs = appIds.stream().map(id -> "?").reduce((a,b) -> a+","+b).orElse("?");
+        jdbcTemplate.update(
+            "DELETE FROM feedback WHERE appuntamento_id IN (" + qs + ")",
+            appIds.toArray()
+        );
+        appuntamentoRepository.deleteAllById(appIds);
+    }
+
+    // 4) Cancella slot e blocchi orario del medico
+    slotRepository.deleteByMedico_Id(medicoId);
+    bloccoOrarioRepository.deleteByMedicoId(medicoId);
+
+    // 5) Elimina il medico
+    medicoRepository.deleteById(medicoId);
+
+    return ResponseEntity.ok(Map.of(
+        "removedAppuntamenti", totApp,
+        "removedFeedback", totFeedback,
+        "removedSlot", totSlot,
+        "removedBlocchiOrario", totBlocchi,
+        "removedAssociazioniPrestazioni", totAssocPrest,
+        "removedAssociazioniSedi", totAssocSedi,
+        "removedCollaboratori", totCollab
+    ));
+    }
+
+    // -------------------- MANUAL TASKS (ADMIN) --------------------
+    /**
+     * Trigger manuale dell'invio richieste feedback per appuntamenti COMPLETATI con feedbackInviato=false.
+     * Ritorna conteggi prima/dopo per diagnosi rapida. Solo ADMIN.
+     */
+    @PostMapping("/feedback/scan")
+    @Transactional
+    public ResponseEntity<?> triggerFeedbackScan() {
+    int before = appuntamentoRepository
+        .findByStatoAndFeedbackInviatoIsFalse(StatoAppuntamento.COMPLETATO)
+        .size();
+    appuntamentoService.inviaRichiesteFeedbackDiAvvio();
+    int after = appuntamentoRepository
+        .findByStatoAndFeedbackInviatoIsFalse(StatoAppuntamento.COMPLETATO)
+        .size();
+    int sent = Math.max(0, before - after);
+    return ResponseEntity.ok(Map.of(
+        "trovatiPrima", before,
+        "rimanenti", after,
+        "inviati", sent
+    ));
     }
 
     // -------------------- ASSOCIAZIONI SPECIALITÀ ↔ MEDICO (prestazioni auto) --------------------

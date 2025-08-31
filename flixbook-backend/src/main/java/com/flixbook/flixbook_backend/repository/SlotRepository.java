@@ -38,4 +38,7 @@ public interface SlotRepository extends JpaRepository<Slot, Long> {
     int deleteUnreferencedByStatoAndDataEOraFineBefore(@Param("stato") SlotStato stato, @Param("cutoff") LocalDateTime cutoff);
 
     long countByMedico_Id(Long medicoId);
+
+    long deleteByMedico_Id(Long medicoId);
+    long deleteByBloccoOrario_IdIn(List<Long> bloccoIds);
 }

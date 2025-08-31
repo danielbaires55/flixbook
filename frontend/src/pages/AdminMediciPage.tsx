@@ -34,6 +34,7 @@ export default function AdminMediciPage() {
   const [saving, setSaving] = useState(false);
   const [warn, setWarn] = useState<{ show: boolean; title: string; message: string }>(() => ({ show: false, title: '', message: '' }));
   const [info, setInfo] = useState<{ show: boolean; title: string; message: string }>(() => ({ show: false, title: '', message: '' }));
+  const [delConfirm, setDelConfirm] = useState<{ show: boolean; medico: Medico | null; text: string; submitting: boolean }>(() => ({ show: false, medico: null, text: '', submitting: false }));
   const headers = useMemo(() => (user ? { Authorization: `Bearer ${user.token}` } : undefined), [user]);
   const isAdmin = user?.role === 'ROLE_ADMIN';
 
@@ -196,27 +197,58 @@ export default function AdminMediciPage() {
   };
 
   const deleteMedico = async (m: Medico) => {
-    if (!confirm(`Eliminare definitivamente ${m.cognome} ${m.nome}?`)) return;
     try {
-      await axios.delete(`${API_BASE_URL}/admin/medici/${m.id}`, { headers });
+      const res = await axios.delete<Record<string, number>>(`${API_BASE_URL}/admin/medici/${m.id}`, { headers });
       const { data } = await axios.get<Medico[]>(`${API_BASE_URL}/admin/medici`, { headers });
       setMedici(data);
+      // Mostra report di eliminazione se disponibile
+      if (res && res.data) {
+        const rpt = res.data;
+        const lines: string[] = [];
+        if (typeof rpt.removedAppuntamenti === 'number') lines.push(`Appuntamenti rimossi: ${rpt.removedAppuntamenti}`);
+        if (typeof rpt.removedFeedback === 'number') lines.push(`Feedback rimossi: ${rpt.removedFeedback}`);
+        if (typeof rpt.removedSlot === 'number') lines.push(`Slot rimossi: ${rpt.removedSlot}`);
+        if (typeof rpt.removedBlocchiOrario === 'number') lines.push(`Blocchi orario rimossi: ${rpt.removedBlocchiOrario}`);
+        if (typeof rpt.removedAssociazioniPrestazioni === 'number') lines.push(`Associazioni prestazioni rimosse: ${rpt.removedAssociazioniPrestazioni}`);
+        if (typeof rpt.removedAssociazioniSedi === 'number') lines.push(`Associazioni sedi rimosse: ${rpt.removedAssociazioniSedi}`);
+        if (typeof rpt.removedCollaboratori === 'number') lines.push(`Collaboratori rimossi: ${rpt.removedCollaboratori}`);
+        setInfo({
+          show: true,
+          title: 'Medico eliminato',
+          message: lines.length ? lines.join('\n') : `${m.cognome} ${m.nome} eliminato con successo.`
+        });
+      } else {
+        setInfo({ show: true, title: 'Medico eliminato', message: `${m.cognome} ${m.nome} eliminato con successo.` });
+      }
     } catch (err) {
-      type Conflict = { error?: string; appuntamenti?: number; blocchiOrario?: number; slot?: number };
+      type Conflict = { error?: string; appuntamenti?: number; blocchiOrario?: number; slot?: number; attiviFuturi?: number };
       const ax = err as import('axios').AxiosError<Conflict>;
       if (ax.response?.status === 409) {
-        const a = ax.response.data?.appuntamenti ?? 0;
-        const b = ax.response.data?.blocchiOrario ?? 0;
-        const s = ax.response.data?.slot ?? 0;
-        setWarn({
-          show: true,
-          title: 'Medico non eliminabile',
-          message: `Esistono ancora dati collegati (appuntamenti: ${a}, blocchi orario: ${b}, slot: ${s}). Rimuovi o archivia prima questi dati e riprova.`,
-        });
+        const att = ax.response.data?.attiviFuturi;
+        if (typeof att === 'number' && att > 0) {
+          setWarn({
+            show: true,
+            title: 'Medico non eliminabile',
+            message: `Il medico ha ${att} appuntamenti attivi nel futuro. Annullali o riprogrammali prima di procedere.`,
+          });
+        } else {
+          const a = ax.response.data?.appuntamenti ?? 0;
+          const b = ax.response.data?.blocchiOrario ?? 0;
+          const s = ax.response.data?.slot ?? 0;
+          setWarn({
+            show: true,
+            title: 'Medico non eliminabile',
+            message: `Esistono ancora dati collegati (appuntamenti: ${a}, blocchi orario: ${b}, slot: ${s}). Rimuovi o archivia prima questi dati e riprova.`,
+          });
+        }
       } else {
         setWarn({ show: true, title: 'Errore', message: 'Eliminazione non riuscita. Riprova più tardi.' });
       }
     }
+  };
+
+  const askDeleteMedico = (m: Medico) => {
+    setDelConfirm({ show: true, medico: m, text: '', submitting: false });
   };
 
   return (
@@ -327,7 +359,7 @@ export default function AdminMediciPage() {
                   <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => openManage(m)}>Gestisci</button>
                 </td>
                 <td className="text-end">
-                  <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => deleteMedico(m)}>Elimina</button>
+                  <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => askDeleteMedico(m)}>Elimina</button>
                 </td>
               </tr>
             ))}
@@ -388,6 +420,47 @@ export default function AdminMediciPage() {
         </Modal.Body>
         <Modal.Footer>
           <Button variant="primary" onClick={() => setInfo(i => ({ ...i, show: false }))}>Ok</Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Modal conferma eliminazione con testo di sicurezza */}
+      <Modal show={delConfirm.show} onHide={() => setDelConfirm(s => ({ ...s, show: false }))} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Conferma eliminazione</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p>
+            Stai per eliminare definitivamente {delConfirm.medico ? `${delConfirm.medico.cognome} ${delConfirm.medico.nome}` : 'questo medico'}.
+            L'operazione rimuoverà anche appuntamenti storici, feedback, slot, blocchi e associazioni.
+          </p>
+          <p className="mb-2">Per confermare, scrivi <strong>ELIMINA</strong> nel campo qui sotto.</p>
+          <input
+            className="form-control"
+            value={delConfirm.text}
+            onChange={e => setDelConfirm(s => ({ ...s, text: e.target.value }))}
+            placeholder="Digita ELIMINA"
+            autoFocus
+            disabled={delConfirm.submitting}
+          />
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setDelConfirm(s => ({ ...s, show: false }))} disabled={delConfirm.submitting}>Annulla</Button>
+          <Button
+            variant="danger"
+            disabled={delConfirm.text.trim().toUpperCase() !== 'ELIMINA' || delConfirm.submitting}
+            onClick={async () => {
+              if (!delConfirm.medico) return;
+              setDelConfirm(s => ({ ...s, submitting: true }));
+              try {
+                await deleteMedico(delConfirm.medico);
+                setDelConfirm({ show: false, medico: null, text: '', submitting: false });
+              } finally {
+                setDelConfirm(s => ({ ...s, submitting: false }));
+              }
+            }}
+          >
+            Elimina definitivamente
+          </Button>
         </Modal.Footer>
       </Modal>
     </div>

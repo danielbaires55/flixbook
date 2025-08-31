@@ -18,28 +18,24 @@
 .login-bozza-modal {
   position: relative;
   width: 717px;
-  height: 472px;
+  height: auto;
   border-radius: 15px;
   background: #fdfdfd;
   box-shadow: 0 4px 4px 0 rgba(0, 0, 0, 0.25);
+  padding-bottom: 28px;
+  padding: 24px;
 }
 
-.login-logo-container {
-  position: absolute;
-  left: 36px;
-  top: 32px;
-  width: 76px;
-  height: 64px;
-  border-radius: 15px;
-  background: #FFF;
+.login-header {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 .login-logo {
-  width: 64px;
-  height: 64px;
+  width: 200px;
+  height: 110px;
   object-fit: contain;
 }
 
@@ -69,11 +65,9 @@
 }
 
 .login-title {
-  position: absolute;
-  left: 139px;
-  top: 37px;
-  width: 335px;
-  height: 59px;
+  position: static;
+  width: auto;
+  height: auto;
   color: #000;
   font-family: Inter, -apple-system, Roboto, Helvetica, sans-serif;
   font-size: 35px;
@@ -85,9 +79,8 @@
 }
 
 .login-form {
-  position: absolute;
-  left: 0;
-  top: 142px;
+  position: static;
+  margin-top: 24px;
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -126,6 +119,7 @@
   font-weight: 400;
   color: #000;
   outline: none;
+  appearance: none;
   -webkit-appearance: none;
   -webkit-tap-highlight-color: transparent;
   box-sizing: border-box;
@@ -185,11 +179,8 @@
 }
 
 .registration-link {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: 30px;
   width: 100%;
+  margin-top: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -236,10 +227,10 @@
   .login-title {
     position: static;
     transform: none;
-    text-align: center;
-    margin-top: 80px;
-    margin-bottom: 20px;
-    width: 100%;
+    text-align: left;
+    margin-top: 0;
+    margin-bottom: 0;
+    width: auto;
     font-size: 28px;
   }
   .login-form {
@@ -263,11 +254,57 @@
     height: 50px;
   }
   .registration-link {
-    position: static;
-    transform: none;
-    margin-top: 24px;
+  position: static;
+  transform: none;
+  margin-top: 24px;
   }
 }
+/* Inline checkbox under email */
+.inline-checkbox {
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: Inter, -apple-system, Roboto, Helvetica, sans-serif;
+  font-size: 14px;
+  color: #333;
+}
+
+/* Password row with toggle */
+.password-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.toggle-password-btn {
+  height: 43px;
+  width: 44px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  padding: 0;
+  font-family: Inter, -apple-system, Roboto, Helvetica, sans-serif;
+  font-size: 14px;
+  color: #344054;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toggle-password-btn:hover {
+  background: #f5f7ff;
+}
+
+/* Forgot password link below button */
+.forgot-link {
+  margin-top: 12px;
+  text-align: center;
+}
+
 
 /* ... resto delle media queries ... */
 

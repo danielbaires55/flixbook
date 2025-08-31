@@ -401,7 +401,7 @@ const MedicoDashboard = () => {
     if (error) return <div className="alert alert-danger mt-5">{error}</div>;
 
     return (
-        <div className="container my-5">
+        <div className="container my-5 medico-dashboard">
             <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
                 <h1 className="mb-0">La tua dashboard</h1>
                 <div className="d-flex align-items-center gap-2">
@@ -444,17 +444,19 @@ const MedicoDashboard = () => {
                                     return (
                                         <div className="d-flex align-items-center gap-2">
                                             <span className="badge text-bg-success">In agenda: {attiviCount}</span>
-                                                                    <button
-                                                                        type="button"
-                                                                        className="btn btn-sm btn-outline-secondary"
-                                                                        onClick={() => { setStoricoPage(1); setShowStoricoModal(true); }}
-                                                                        title="Mostra storico"
-                                                                    >
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16" aria-hidden>
-                                                    <path d="M8 3.5a.5.5 0 0 1 .5.5v4l3 1.5a.5.5 0 1 1-.5.866l-3.5-1.75A.5.5 0 0 1 7 8V4a.5.5 0 0 1 .5-.5" />
-                                                    <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m0-1A7 7 0 1 1 8 1a7 7 0 0 1 0 14" />
+                                            <button
+                                                type="button"
+                                                className="btn btn-outline-secondary btn-sm rounded-circle d-inline-flex align-items-center justify-content-center"
+                                                style={{ width: 34, height: 34, padding: 0, lineHeight: 1 }}
+                                                onClick={() => { setStoricoPage(1); setShowStoricoModal(true); }}
+                                                aria-label="Storico appuntamenti"
+                                                title={`Storico${storiciCount > 0 ? ` (${storiciCount})` : ''}`}
+                                            >
+                                                {/* history (circular arrow) icon, same as PazienteDashboard */}
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" aria-hidden>
+                                                    <path fill-rule="evenodd" d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 1 0-.908-.417A6 6 0 1 0 8 2v1z"/>
+                                                    <path d="M8 0a.5.5 0 0 1 .5.5V2h1a.5.5 0 0 1 0 1H7.5A.5.5 0 0 1 7 2.5v-2A.5.5 0 0 1 7.5 0h.5z"/>
                                                 </svg>
-                                                <span className="ms-1">Storico {storiciCount > 0 ? `(${storiciCount})` : ''}</span>
                                             </button>
                                         </div>
                                     );
@@ -519,7 +521,7 @@ const MedicoDashboard = () => {
                                                 ))}
                                             </ul>
                                         ) : (
-                                            <div className="alert alert-info text-center mt-3">Nessun appuntamento attivo.</div>
+                                            <div className="empty-state text-center mt-3">Nessun appuntamento attivo.</div>
                                         )}
                                     </>
                                 );

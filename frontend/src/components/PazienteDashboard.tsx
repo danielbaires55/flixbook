@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Modal, Button } from "react-bootstrap";
 import "bootstrap/dist/css/bootstrap.min.css";
 import { useAuth } from "../context/useAuth";
+import "./css/PazienteDashboard.css";
 
 // --- Interfacce Aggiornate ---
 interface Medico { id: number; nome: string; cognome: string; imgProfUrl: string; }
@@ -34,8 +35,7 @@ const API_BASE_URL = "http://localhost:8080/api";
 const SERVER_BASE_URL = 'http://localhost:8080';
 
 const PazienteDashboard = () => {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
+  const { user } = useAuth();
   
   const [profile, setProfile] = useState<PazienteProfile | null>(null);
   const [appuntamenti, setAppuntamenti] = useState<Appuntamento[]>([]);
@@ -58,6 +58,15 @@ const PazienteDashboard = () => {
   const [resSelectedSedeId, setResSelectedSedeId] = useState<number | ''>('');
   const [resSediOptions, setResSediOptions] = useState<Array<{ id?: number; nome?: string }>>([]);
   const [resSuccessOpen, setResSuccessOpen] = useState(false);
+
+  // Action feedback/confirmations
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [cancelTargetId, setCancelTargetId] = useState<number | null>(null);
+  const [cancelSuccessOpen, setCancelSuccessOpen] = useState(false);
+  const [docDeleteConfirmOpen, setDocDeleteConfirmOpen] = useState(false);
+  const [docDeleteId, setDocDeleteId] = useState<number | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionErrorOpen, setActionErrorOpen] = useState(false);
 
   // Storico modal (past appointments)
   const [storicoOpen, setStoricoOpen] = useState(false);
@@ -95,25 +104,28 @@ const PazienteDashboard = () => {
     fetchAllData();
   }, [user]);
 
-  const handleAnnulla = async (appuntamentoId: number) => {
-    if (!window.confirm("Sei sicuro di voler annullare questo appuntamento?") || !user) {
-      return;
-    }
+  const handleAnnulla = (appuntamentoId: number) => {
+    setCancelTargetId(appuntamentoId);
+    setCancelConfirmOpen(true);
+  };
 
+  const confirmAnnulla = async () => {
+    if (!user || !cancelTargetId) return;
     try {
       await axios.put(
-        `${API_BASE_URL}/appuntamenti/annulla/${appuntamentoId}`, null,
+        `${API_BASE_URL}/appuntamenti/annulla/${cancelTargetId}`, null,
         { headers: { Authorization: `Bearer ${user.token}` } }
       );
-      alert("Appuntamento annullato con successo!");
       setAppuntamenti((prev) =>
-        prev.map((app) =>
-          app.id === appuntamentoId ? { ...app, stato: "ANNULLATO" } : app
-        )
+        prev.map((app) => (app.id === cancelTargetId ? { ...app, stato: "ANNULLATO" } : app))
       );
+      setCancelConfirmOpen(false);
+      setCancelTargetId(null);
+      setCancelSuccessOpen(true);
     } catch (err) {
       console.error("Errore nell'annullamento dell'appuntamento", err);
-      alert("Si è verificato un errore durante l'annullamento. Riprova.");
+      setActionError("Si è verificato un errore durante l'annullamento. Riprova.");
+      setActionErrorOpen(true);
     }
   };
 
@@ -200,10 +212,7 @@ const PazienteDashboard = () => {
   setResSlots(resAllSlots.filter((s) => s.sedeId === sedeId));
   };
 
-  const handleLogout = () => {
-    logout();
-    navigate('/');
-  };
+  // Logout gestito dalla navbar; bottone rimosso per evitare ridondanza.
 
   const openDocModal = async (app: Appuntamento) => {
     setDocTargetApp(app);
@@ -234,13 +243,21 @@ const PazienteDashboard = () => {
       // ignore
     } finally { setDocLoading(false); }
   };
-  const deleteDoc = async (docId: number) => {
-    if (!user || !docTargetApp) return;
-    if (!window.confirm('Eliminare questo documento?')) return;
+  const askDeleteDoc = (docId: number) => {
+    setDocDeleteId(docId);
+    setDocDeleteConfirmOpen(true);
+  };
+  const deleteDoc = async () => {
+    if (!user || !docTargetApp || !docDeleteId) return;
     try {
-      await axios.delete(`${API_BASE_URL}/appuntamenti/${docTargetApp.id}/documenti/${docId}`, { headers: { Authorization: `Bearer ${user.token}` } });
-      setDocList(prev => prev.filter(d => d.id !== docId));
-  } catch {/* ignore */}
+      await axios.delete(`${API_BASE_URL}/appuntamenti/${docTargetApp.id}/documenti/${docDeleteId}`, { headers: { Authorization: `Bearer ${user.token}` } });
+      setDocList(prev => prev.filter(d => d.id !== docDeleteId));
+      setDocDeleteConfirmOpen(false);
+      setDocDeleteId(null);
+    } catch {
+      setActionError("Non è stato possibile eliminare il documento. Riprova.");
+      setActionErrorOpen(true);
+    }
   };
 
   // Helpers for upcoming vs past and filtering
@@ -278,7 +295,7 @@ const PazienteDashboard = () => {
   if (error) return <div className="alert alert-danger mt-5">{error}</div>;
 
   return (
-  <div className="container mt-5">
+  <div className="container mt-5 paziente-dashboard">
       <h1 className="text-center mb-4">La Tua Area Personale</h1>
       <div className="row">
         <div className="col-lg-5 mb-4">
@@ -293,12 +310,9 @@ const PazienteDashboard = () => {
                 </ul>
               ) : <p>Informazioni non disponibili.</p>}
               <div className="mt-auto text-center pt-3">
-                <Link to="/book" className="btn btn-primary w-100">
+                <Link to="/book" className="btn btn-primary px-4">
                   Prenota un Nuovo Appuntamento
                 </Link>
-                <button className="btn btn-outline-secondary w-100 mt-2" onClick={handleLogout}>
-                    Logout
-                </button>
               </div>
             </div>
           </div>
@@ -309,8 +323,18 @@ const PazienteDashboard = () => {
             <div className="card-body">
               <div className="d-flex justify-content-between align-items-center">
                 <h4 className="card-title text-center mb-0">I tuoi appuntamenti</h4>
-                <button className="btn btn-outline-secondary btn-sm" onClick={() => { setStoricoOpen(true); setStoricoPage(1); }}>
-                  Storico
+                <button
+                  className="btn btn-outline-secondary btn-sm rounded-circle d-inline-flex align-items-center justify-content-center"
+                  style={{ width: 34, height: 34, padding: 0, lineHeight: 1 }}
+                  onClick={() => { setStoricoOpen(true); setStoricoPage(1); }}
+                  aria-label="Storico appuntamenti"
+                  title="Storico"
+                >
+                  {/* history (circular arrow) icon */}
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" aria-hidden>
+                    <path fill-rule="evenodd" d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 1 0-.908-.417A6 6 0 1 0 8 2v1z"/>
+                    <path d="M8 0a.5.5 0 0 1 .5.5V2h1a.5.5 0 0 1 0 1H7.5A.5.5 0 0 1 7 2.5v-2A.5.5 0 0 1 7.5 0h.5z"/>
+                  </svg>
                 </button>
               </div>
               {upcomingAppointments.length > 0 ? (
@@ -382,7 +406,7 @@ const PazienteDashboard = () => {
                   ))}
                 </ul>
               ) : (
-                <div className="alert alert-info text-center mt-3">
+                <div className="empty-state text-center mt-3">
                   Nessun appuntamento in programma.
                 </div>
               )}
@@ -413,7 +437,7 @@ const PazienteDashboard = () => {
         list={docList}
         setFile={setDocFile}
         upload={uploadDoc}
-        del={deleteDoc}
+        del={askDeleteDoc}
         loading={docLoading}
         setPrivacy={setDocPrivacy}
       />
@@ -443,6 +467,60 @@ const PazienteDashboard = () => {
           <Button variant="primary" onClick={() => setResSuccessOpen(false)}>OK</Button>
         </Modal.Footer>
       </Modal>
+
+      {/* Modal conferma annullamento */}
+      <Modal show={cancelConfirmOpen} onHide={() => setCancelConfirmOpen(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Conferma annullamento</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          Sei sicuro di voler annullare questo appuntamento?
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setCancelConfirmOpen(false)}>No</Button>
+          <Button variant="danger" onClick={confirmAnnulla}>Sì, annulla</Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Modal esito annullamento */}
+      <Modal show={cancelSuccessOpen} onHide={() => setCancelSuccessOpen(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Appuntamento annullato</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          L'appuntamento è stato annullato con successo.
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="primary" onClick={() => setCancelSuccessOpen(false)}>OK</Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Modal conferma eliminazione documento */}
+      <Modal show={docDeleteConfirmOpen} onHide={() => setDocDeleteConfirmOpen(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Elimina documento</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          Vuoi eliminare questo documento?
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setDocDeleteConfirmOpen(false)}>Annulla</Button>
+          <Button variant="danger" onClick={deleteDoc}>Elimina</Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Modal errore azione */}
+      <Modal show={actionErrorOpen} onHide={() => setActionErrorOpen(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Errore</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {actionError || 'Si è verificato un errore. Riprova.'}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setActionErrorOpen(false)}>Chiudi</Button>
+        </Modal.Footer>
+      </Modal>
     </div>
   );
 };
@@ -470,10 +548,10 @@ const DocsModal = ({ open, onClose, app, list, setFile, upload, del, loading, se
           <h6>Documenti caricati</h6>
       {loading ? <div>Caricamento…</div> : list.length === 0 ? <div className="text-muted">Nessun documento</div> : (
             <ul className="list-group">
-        {list.map((d) => (
+              {list.map((d) => (
                 <li key={d.id} className="list-group-item d-flex justify-content-between align-items-center">
-          <a href={`${SERVER_BASE_URL}/api/appuntamenti/${app!.id}/documenti/${d.id}`} target="_blank" rel="noopener noreferrer">{d.originalName}</a>
-          <button className="btn btn-sm btn-outline-danger" onClick={() => del(d.id)}>Elimina</button>
+                  <a href={`${SERVER_BASE_URL}/api/appuntamenti/${app!.id}/documenti/${d.id}`} target="_blank" rel="noopener noreferrer">{d.originalName}</a>
+                  <button className="btn btn-sm btn-outline-danger" onClick={() => del(d.id)}>Elimina</button>
                 </li>
               ))}
             </ul>

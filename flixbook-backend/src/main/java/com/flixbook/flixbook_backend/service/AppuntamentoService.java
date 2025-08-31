@@ -2,6 +2,9 @@ package com.flixbook.flixbook_backend.service;
 
 import com.flixbook.flixbook_backend.model.*;
 import com.flixbook.flixbook_backend.repository.AppuntamentoRepository;
+import com.flixbook.flixbook_backend.repository.BloccoOrarioRepository;
+import com.flixbook.flixbook_backend.repository.MedicoSedeRepository;
+import com.flixbook.flixbook_backend.repository.SedeRepository;
 import com.flixbook.flixbook_backend.repository.MedicoRepository;
 import com.flixbook.flixbook_backend.repository.PazienteRepository;
 import com.flixbook.flixbook_backend.repository.PrestazioneRepository;
@@ -12,6 +15,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -23,9 +29,10 @@ import java.util.UUID;
 @Service
 @Transactional
 public class AppuntamentoService implements InitializingBean {
+    private static final Logger log = LoggerFactory.getLogger(AppuntamentoService.class);
 
-    private static final String INDIRIZZO_STUDIO = "Via del Benessere, 10 - 20121 Milano (MI)"; // fallback legacy
-    private static final String INDIRIZZO_STUDIO_SHORT = "Via del Benessere 10, Milano"; // fallback legacy
+    private static final String INDIRIZZO_STUDIO = "Via della Spiga, 10 - 20121 Milano (MI)"; // fallback
+    private static final String INDIRIZZO_STUDIO_SHORT = "Via della Spiga 10, Milano"; // fallback
 
     @Autowired
     private AppuntamentoRepository appuntamentoRepository;
@@ -42,11 +49,19 @@ public class AppuntamentoService implements InitializingBean {
     @Autowired
     private SmsService smsService;
     private final CalendarInviteService calendarInviteService = new CalendarInviteService();
+    @Autowired
+    private BloccoOrarioRepository bloccoOrarioRepository;
+    @Autowired
+    private MedicoSedeRepository medicoSedeRepository;
+    @Autowired
+    private SedeRepository sedeRepository;
 
     @Value("${calendar.ics.enabled:true}")
     private boolean calendarIcsEnabled;
     @Value("${calendar.google.link.enabled:true}")
     private boolean googleLinkEnabled;
+    @Value("${app.frontend.base-url:http://localhost:5173}")
+    private String frontendBaseUrl;
 
     /**
      * Crea un nuovo appuntamento dal sistema di slot dinamici, completo di notifiche.
@@ -248,6 +263,16 @@ public class AppuntamentoService implements InitializingBean {
         inviaRichiesteFeedbackDiAvvio();
     }
 
+    // Scheduler: ogni 10 minuti invia richieste feedback per appuntamenti COMPLETATI senza email inviata
+    @Scheduled(fixedDelay = 600000L, initialDelay = 120000L)
+    public void inviaRichiesteFeedbackPeriodiche() {
+        try {
+            inviaRichiesteFeedbackDiAvvio();
+        } catch (Exception e) {
+            if (log.isDebugEnabled()) log.debug("Errore invio richieste feedback periodiche: {}", e.getMessage());
+        }
+    }
+
     private void updateCompletedAppointments() {
         List<Appuntamento> appointmentsToComplete = appuntamentoRepository.findAppointmentsToUpdateStatus(LocalDateTime.now(), StatoAppuntamento.CONFERMATO);
         if (!appointmentsToComplete.isEmpty()) {
@@ -311,8 +336,9 @@ public class AppuntamentoService implements InitializingBean {
         }
     }
     
-    private void inviaRichiesteFeedbackDiAvvio() {
+    public void inviaRichiesteFeedbackDiAvvio() {
         List<Appuntamento> appuntamentiCompletati = appuntamentoRepository.findByStatoAndFeedbackInviatoIsFalse(StatoAppuntamento.COMPLETATO);
+        if (log.isInfoEnabled()) log.info("Feedback scan: trovati {} appuntamenti COMPLETATI senza feedback", appuntamentiCompletati.size());
         for (Appuntamento appuntamento : appuntamentiCompletati) {
             Paziente paziente = appuntamento.getPaziente();
             Medico medico = appuntamento.getMedico();
@@ -321,14 +347,20 @@ public class AppuntamentoService implements InitializingBean {
             
             String destinatario = paziente.getEmail();
             String oggetto = "Lascia un feedback per il tuo appuntamento";
-            String feedbackLink = "http://localhost:5173/feedback/" + appuntamento.getId();
+            String feedbackLink = frontendBaseUrl.replaceAll("/$", "") + "/feedback/" + appuntamento.getId();
             String corpo = String.format(
                 "Gentile %s,\n\nIl suo appuntamento con il Dr. %s è stato completato.\nCi aiuti a migliorare lasciando un feedback: %s\n\nGrazie!",
                 paziente.getNome(),
                 medico.getCognome(),
                 feedbackLink
             );
-            emailService.sendEmail(destinatario, oggetto, corpo);
+            try {
+                emailService.sendEmail(destinatario, oggetto, corpo);
+                if (log.isInfoEnabled()) log.info("Feedback email inviata a {} per appuntamento {}", destinatario, appuntamento.getId());
+            } catch (Exception e) {
+                if (log.isWarnEnabled()) log.warn("Invio feedback fallito per appuntamento {}: {}", appuntamento.getId(), e.getMessage());
+                continue;
+            }
             appuntamento.setFeedbackInviato(true);
             appuntamentoRepository.save(appuntamento);
         }
@@ -406,6 +438,7 @@ public class AppuntamentoService implements InitializingBean {
         try {
             if (app.getSlot() != null && app.getSlot().getBloccoOrario() != null && app.getSlot().getBloccoOrario().getSede() != null) {
                 var s = app.getSlot().getBloccoOrario().getSede();
+                if (log.isDebugEnabled()) log.debug("formatIndirizzo: using slot->blocco.sede for app={} sedeId={}", app.getId(), s.getId());
                 if (shortForm) {
                     StringBuilder sb = new StringBuilder();
                     if (s.getIndirizzo() != null && !s.getIndirizzo().isBlank()) sb.append(s.getIndirizzo());
@@ -433,6 +466,87 @@ public class AppuntamentoService implements InitializingBean {
                         if (!sb.isEmpty()) sb.append(" (").append(prov).append(")");
                     }
                     return sb.isEmpty() ? INDIRIZZO_STUDIO : sb.toString();
+                }
+            }
+            // Fallback: nessuna sede sullo slot. Prova a inferire la sede dal blocco orario del medico che copre l'orario dell'appuntamento
+        if (app.getMedico() != null && app.getDataEOraInizio() != null) {
+                var data = app.getDataEOraInizio().toLocalDate();
+                var oraInizio = app.getDataEOraInizio().toLocalTime();
+                var blocchi = bloccoOrarioRepository.findByMedicoIdAndData(app.getMedico().getId(), data);
+                for (var b : blocchi) {
+                    if (b.getSede() == null) continue;
+                    // Verifica se l'orario dell'appuntamento cade nel blocco [oraInizio, oraFine)
+                    if (!oraInizio.isBefore(b.getOraFine()) || oraInizio.isBefore(b.getOraInizio())) continue;
+                    var s = b.getSede();
+            if (log.isDebugEnabled()) log.debug("formatIndirizzo: using blocco.sede fallback for app={} sedeId={}", app.getId(), s.getId());
+                    if (shortForm) {
+                        StringBuilder sb = new StringBuilder();
+                        if (s.getIndirizzo() != null && !s.getIndirizzo().isBlank()) sb.append(s.getIndirizzo());
+                        if (s.getCitta() != null && !s.getCitta().isBlank()) {
+                            if (!sb.isEmpty()) sb.append(", ");
+                            sb.append(s.getCitta());
+                        }
+                        return sb.isEmpty() ? INDIRIZZO_STUDIO_SHORT : sb.toString();
+                    } else {
+                        String cap = s.getCap();
+                        String citta = s.getCitta();
+                        String prov = s.getProvincia();
+                        String indir = s.getIndirizzo();
+                        StringBuilder sb = new StringBuilder();
+                        if (indir != null && !indir.isBlank()) sb.append(indir);
+                        if (cap != null && !cap.isBlank()) {
+                            if (!sb.isEmpty()) sb.append(" - ");
+                            sb.append(cap);
+                        }
+                        if (citta != null && !citta.isBlank()) {
+                            if (!sb.isEmpty()) sb.append(" ");
+                            sb.append(citta);
+                        }
+                        if (prov != null && !prov.isBlank()) {
+                            if (!sb.isEmpty()) sb.append(" (").append(prov).append(")");
+                        }
+                        return sb.isEmpty() ? INDIRIZZO_STUDIO : sb.toString();
+                    }
+                }
+            }
+            // Fallback 2: nessuna sede deducibile dai blocchi. Prova la prima sede associata al medico
+            if (app.getMedico() != null) {
+                var assocs = medicoSedeRepository.findByIdMedicoId(app.getMedico().getId());
+                if (assocs != null && !assocs.isEmpty()) {
+                    var sedeId = assocs.get(0).getId().getSedeId();
+                    var sedeOpt = sedeRepository.findById(sedeId);
+                    if (sedeOpt.isPresent()) {
+                        var s = sedeOpt.get();
+                        log.info("formatIndirizzo: using medico->prima sede fallback for app={} sedeId={}", app.getId(), s.getId());
+                        if (shortForm) {
+                            StringBuilder sb = new StringBuilder();
+                            if (s.getIndirizzo() != null && !s.getIndirizzo().isBlank()) sb.append(s.getIndirizzo());
+                            if (s.getCitta() != null && !s.getCitta().isBlank()) {
+                                if (!sb.isEmpty()) sb.append(", ");
+                                sb.append(s.getCitta());
+                            }
+                            return sb.isEmpty() ? INDIRIZZO_STUDIO_SHORT : sb.toString();
+                        } else {
+                            String cap = s.getCap();
+                            String citta = s.getCitta();
+                            String prov = s.getProvincia();
+                            String indir = s.getIndirizzo();
+                            StringBuilder sb = new StringBuilder();
+                            if (indir != null && !indir.isBlank()) sb.append(indir);
+                            if (cap != null && !cap.isBlank()) {
+                                if (!sb.isEmpty()) sb.append(" - ");
+                                sb.append(cap);
+                            }
+                            if (citta != null && !citta.isBlank()) {
+                                if (!sb.isEmpty()) sb.append(" ");
+                                sb.append(citta);
+                            }
+                            if (prov != null && !prov.isBlank()) {
+                                if (!sb.isEmpty()) sb.append(" (").append(prov).append(")");
+                            }
+                            return sb.isEmpty() ? INDIRIZZO_STUDIO : sb.toString();
+                        }
+                    }
                 }
             }
         } catch (Exception ignored) {}

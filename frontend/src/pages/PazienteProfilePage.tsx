@@ -25,6 +25,8 @@ const PazienteProfiloPage: FC = () => {
     const [formData, setFormData] = useState<Partial<PazienteProfile>>({});
     // Stato separato per i dati della password
     const [passwordData, setPasswordData] = useState({ vecchiaPassword: '', nuovaPassword: '', confermaPassword: '' });
+    // Stato per mostrare/nascondere la sezione sicurezza
+    const [showSecurity, setShowSecurity] = useState(false);
     
     // Stati per i messaggi di feedback all'utente
     const [message, setMessage] = useState('');
@@ -139,7 +141,9 @@ const PazienteProfiloPage: FC = () => {
                                     <div className="col-md-4 mb-3"><label className="form-label">Provincia</label><input type="text" name="provincia" className="form-control" value={formData.provincia || ''} onChange={handleChange} /></div>
                                     <div className="col-md-3 mb-3"><label className="form-label">CAP</label><input type="text" name="cap" className="form-control" value={formData.cap || ''} onChange={handleChange} /></div>
                                 </div>
-                                <button type="submit" className="btn btn-primary w-100">Salva Dati</button>
+                                                                <div className="d-flex justify-content-end">
+                                                                    <button type="submit" className="btn btn-primary px-4">Salva Dati</button>
+                                                                </div>
                             </form>
                         </div>
                     </div>
@@ -147,15 +151,50 @@ const PazienteProfiloPage: FC = () => {
                 {/* --- Form Cambio Password --- */}
                 <div className="col-lg-5">
                     <div className="card shadow-sm h-100">
-                        <div className="card-body p-4">
-                            <h4 className="card-title mb-3">Cambia Password</h4>
-                            <form onSubmit={handlePasswordSubmit}>
-                                <div className="mb-3"><label className="form-label">Vecchia Password</label><input type="password" required className="form-control" value={passwordData.vecchiaPassword} onChange={e => setPasswordData({...passwordData, vecchiaPassword: e.target.value})} /></div>
-                                <div className="mb-3"><label className="form-label">Nuova Password</label><input type="password" required className="form-control" value={passwordData.nuovaPassword} onChange={e => setPasswordData({...passwordData, nuovaPassword: e.target.value})} /></div>
-                                <div className="mb-3"><label className="form-label">Conferma Nuova Password</label><input type="password" required className="form-control" value={passwordData.confermaPassword} onChange={e => setPasswordData({...passwordData, confermaPassword: e.target.value})} /></div>
-                                <button type="submit" className="btn btn-secondary w-100">Cambia Password</button>
-                            </form>
-                        </div>
+                                                <div className="card-body p-4">
+                                                        <div className="d-flex align-items-center justify-content-between mb-2">
+                                                            <h4 className="card-title mb-0">Sicurezza</h4>
+                                                            <button
+                                                                type="button"
+                                                                className={`btn btn-sm ${showSecurity ? 'btn-outline-secondary' : 'btn-secondary'}`}
+                                                                onClick={() => setShowSecurity(v => !v)}
+                                                                aria-expanded={showSecurity}
+                                                                aria-controls="security-section"
+                                                                title={showSecurity ? 'Chiudi impostazioni sicurezza' : 'Apri impostazioni sicurezza'}
+                                                            >
+                                                                {/* lock icon */}
+                                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" aria-hidden>
+                                                                    <path d="M8 1a3 3 0 0 0-3 3v3H4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-1V4a3 3 0 0 0-3-3m2 6V4a2 2 0 1 0-4 0v3z"/>
+                                                                </svg>
+                                                                <span className="ms-2">{showSecurity ? 'Chiudi' : 'Sicurezza'}</span>
+                                                            </button>
+                                                        </div>
+                                                        {!showSecurity && (
+                                                            <p className="text-muted small mb-0">Gestisci le impostazioni di sicurezza del tuo account.</p>
+                                                        )}
+                                                        {showSecurity && (
+                                                            <div id="security-section" className="mt-3">
+                                                                <h6 className="mb-3">Cambia Password</h6>
+                                                                <form onSubmit={handlePasswordSubmit}>
+                                                                    <div className="mb-3">
+                                                                        <label className="form-label">Vecchia Password</label>
+                                                                        <input type="password" required className="form-control" value={passwordData.vecchiaPassword} onChange={e => setPasswordData({...passwordData, vecchiaPassword: e.target.value})} />
+                                                                    </div>
+                                                                    <div className="mb-3">
+                                                                        <label className="form-label">Nuova Password</label>
+                                                                        <input type="password" required className="form-control" value={passwordData.nuovaPassword} onChange={e => setPasswordData({...passwordData, nuovaPassword: e.target.value})} />
+                                                                    </div>
+                                                                    <div className="mb-3">
+                                                                        <label className="form-label">Conferma Nuova Password</label>
+                                                                        <input type="password" required className="form-control" value={passwordData.confermaPassword} onChange={e => setPasswordData({...passwordData, confermaPassword: e.target.value})} />
+                                                                    </div>
+                                                                    <div className="d-flex justify-content-end">
+                                                                        <button type="submit" className="btn btn-secondary px-4">Cambia Password</button>
+                                                                    </div>
+                                                                </form>
+                                                            </div>
+                                                        )}
+                                                </div>
                     </div>
                 </div>
             </div>

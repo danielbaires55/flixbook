@@ -26,4 +26,6 @@ public interface BloccoOrarioRepository extends JpaRepository<BloccoOrario, Long
     List<BloccoOrario> findByMedicoIdAndSede_IdAndData(Long medicoId, Long sedeId, LocalDate data);
 
     long countByMedicoId(Long medicoId);
+
+    long deleteByMedicoId(Long medicoId);
 }

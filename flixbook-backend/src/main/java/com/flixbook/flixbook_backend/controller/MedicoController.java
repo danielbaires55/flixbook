@@ -3,6 +3,8 @@ package com.flixbook.flixbook_backend.controller;
 
 import com.flixbook.flixbook_backend.config.CustomUserDetails; // <-- 1. IMPORTA CUSTOMUSERDETAILS
 import com.flixbook.flixbook_backend.model.Medico;
+import com.flixbook.flixbook_backend.dto.MedicoWithRatingDTO;
+import com.flixbook.flixbook_backend.service.MedicoRatingsService;
 import com.flixbook.flixbook_backend.model.Sede;
 import com.flixbook.flixbook_backend.repository.SedeRepository;
 import com.flixbook.flixbook_backend.repository.MedicoSedeRepository;
@@ -31,6 +33,8 @@ public class MedicoController {
 
     @Autowired
     private MedicoService medicoService;
+    @Autowired
+    private MedicoRatingsService medicoRatingsService;
 
     @Autowired
     private SedeRepository sedeRepository;
@@ -79,6 +83,18 @@ public class MedicoController {
     @GetMapping
     public List<Medico> getAllMedici() {
         return medicoService.findAll();
+    }
+
+    // Pubblico: elenco medici con media valutazioni e conteggio
+    @GetMapping("/withRatings")
+    public ResponseEntity<List<MedicoWithRatingDTO>> getAllMediciWithRatings() {
+        return ResponseEntity.ok(medicoRatingsService.listAllWithRatings());
+    }
+
+    // Pubblico: elenco medici per prestazione con media valutazioni e conteggio
+    @GetMapping("/byPrestazione/{prestazioneId}/withRatings")
+    public ResponseEntity<List<MedicoWithRatingDTO>> getMediciByPrestazioneWithRatings(@PathVariable Long prestazioneId) {
+        return ResponseEntity.ok(medicoRatingsService.listByPrestazioneWithRatings(prestazioneId));
     }
     
    @PutMapping("/profilo")
