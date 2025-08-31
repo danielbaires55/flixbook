@@ -72,6 +72,28 @@ public class SmsService {
         }
     }
 
+    /**
+     * Unified template for patient messages: Conferma/Annullamento/Spostamento.
+     * Example: "Flixbook: Appuntamento Confermato. Dettagli: Dr. Rossi, Visita, 2025-09-01 ore 10:00. VC: <link>"
+     */
+    public void sendPatientAppointmentMessage(String to, String statoLabel, String dettagli) {
+        if (!enabled) {
+            System.out.println("[SmsService] sendPatientAppointmentMessage skipped (Twilio disabled): to=" + to + ", stato=" + statoLabel + ", details=" + truncate(dettagli));
+            return;
+        }
+        try {
+            String text = String.format("Flixbook: Appuntamento %s. Dettagli: %s", statoLabel, dettagli);
+            Message message = Message.creator(
+                new PhoneNumber(to),
+                new PhoneNumber(twilioPhoneNumber),
+                text
+            ).create();
+            System.out.println("SMS paziente inviato con SID: " + message.getSid());
+        } catch (Exception e) {
+            System.err.println("Errore nell'invio dell'SMS paziente a " + to + ": " + e.getMessage());
+        }
+    }
+
     private static boolean isBlank(String s) {
         return s == null || s.trim().isEmpty();
     }

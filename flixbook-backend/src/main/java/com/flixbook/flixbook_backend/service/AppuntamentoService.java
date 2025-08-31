@@ -218,13 +218,14 @@ public class AppuntamentoService implements InitializingBean {
 
         String numeroTelefonoPaziente = paziente.getTelefono();
         if (numeroTelefonoPaziente != null && !numeroTelefonoPaziente.trim().isEmpty()) {
-            String corpoSms = String.format(
-                "Il suo appuntamento con Dr. %s %s del %s alle %s è stato annullato dallo studio medico.",
+            String dettagli = String.format(
+                "Dr. %s %s, %s, %s ore %s.",
                 medico.getNome(), medico.getCognome(),
+                prestazione.getNome(),
                 appuntamento.getDataEOraInizio().toLocalDate().toString(),
                 appuntamento.getDataEOraInizio().toLocalTime().toString()
             );
-            smsService.sendSms(numeroTelefonoPaziente, corpoSms);
+            smsService.sendPatientAppointmentMessage(numeroTelefonoPaziente, "Annullato", dettagli);
         }
     }
     
@@ -290,19 +291,19 @@ public class AppuntamentoService implements InitializingBean {
             if (!app.isSmsReminderInviato()) {
                 String numeroTelefono = paziente.getTelefono();
                 if (numeroTelefono != null && !numeroTelefono.trim().isEmpty()) {
-                    StringBuilder corpoSmsBuilder = new StringBuilder(String.format(
-                        "Promemoria Flixbook: domani ore %s - Dr. %s - %s.",
-                        app.getDataEOraInizio().toLocalTime().toString(),
-                        medico.getCognome(),
-                        prestazione.getNome()
+                    StringBuilder details = new StringBuilder(String.format(
+                        "Dr. %s %s, %s, %s ore %s.",
+                        medico.getNome(), medico.getCognome(),
+                        prestazione.getNome(),
+                        app.getDataEOraInizio().toLocalDate().toString(),
+                        app.getDataEOraInizio().toLocalTime().toString()
                     ));
                     if (app.getTipoAppuntamento() == TipoAppuntamento.virtuale && app.getLinkVideocall() != null) {
-                        corpoSmsBuilder.append(" VC: ").append(app.getLinkVideocall());
+                        details.append(" VC: ").append(app.getLinkVideocall());
                     } else if (app.getTipoAppuntamento() == TipoAppuntamento.fisico) {
-                        corpoSmsBuilder.append(" Ind: ").append(formatIndirizzo(app, true));
+                        details.append(" Ind: ").append(formatIndirizzo(app, true));
                     }
-                    String corpoSms = corpoSmsBuilder.toString();
-                    smsService.sendSms(numeroTelefono, corpoSms);
+                    smsService.sendPatientAppointmentMessage(numeroTelefono, "Promemoria", details.toString());
                     app.setSmsReminderInviato(true);
                 }
             }
@@ -365,7 +366,7 @@ public class AppuntamentoService implements InitializingBean {
         String numeroTelefono = paziente.getTelefono();
         if (numeroTelefono != null && !numeroTelefono.trim().isEmpty()) {
             StringBuilder dettagliSmsBuilder = new StringBuilder(String.format(
-                "Dr. %s %s, %s, %s alle %s.",
+                "Dr. %s %s, %s, %s ore %s.",
                 medico.getNome(), medico.getCognome(), prestazione.getNome(),
                 appuntamento.getDataEOraInizio().toLocalDate().toString(),
                 appuntamento.getDataEOraInizio().toLocalTime().toString()
@@ -375,8 +376,7 @@ public class AppuntamentoService implements InitializingBean {
             } else if (appuntamento.getTipoAppuntamento() == TipoAppuntamento.fisico) {
                 dettagliSmsBuilder.append(" Ind: ").append(formatIndirizzo(appuntamento, true));
             }
-            String dettagliSms = dettagliSmsBuilder.toString();
-            smsService.sendConfirmationSms(numeroTelefono, dettagliSms);
+            smsService.sendPatientAppointmentMessage(numeroTelefono, "Confermato", dettagliSmsBuilder.toString());
         }
 
         // Notifica anche il medico della nuova prenotazione
@@ -561,8 +561,13 @@ public class AppuntamentoService implements InitializingBean {
                 }
             }
             if (p.getTelefono() != null && !p.getTelefono().isBlank()) {
-                String sms = String.format("Riprogrammato: %s, Dr. %s %s, %s %s.", pr.getNome(), m.getNome(), m.getCognome(), saved.getDataEOraInizio().toLocalDate(), saved.getDataEOraInizio().toLocalTime());
-                smsService.sendSms(p.getTelefono(), sms);
+                StringBuilder details = new StringBuilder(String.format("Dr. %s %s, %s, %s ore %s.", m.getNome(), m.getCognome(), pr.getNome(), saved.getDataEOraInizio().toLocalDate(), saved.getDataEOraInizio().toLocalTime()));
+                if (saved.getTipoAppuntamento() == TipoAppuntamento.virtuale && saved.getLinkVideocall() != null) {
+                    details.append(" VC: ").append(saved.getLinkVideocall());
+                } else if (saved.getTipoAppuntamento() == TipoAppuntamento.fisico) {
+                    details.append(" Ind: ").append(formatIndirizzo(saved, true));
+                }
+                smsService.sendPatientAppointmentMessage(p.getTelefono(), "Spostato", details.toString());
             }
         } catch (Exception ignored) {}
 
