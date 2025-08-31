@@ -107,6 +107,16 @@ const MedicoDashboard = () => {
     const [resSelectedSedeId, setResSelectedSedeId] = useState<number | ''>('');
     const [resSediOptions, setResSediOptions] = useState<Array<{ id?: number; nome?: string }>>([]);
 
+    // Generic error modal
+    const [errorModalOpen, setErrorModalOpen] = useState(false);
+    const [errorModalMessage, setErrorModalMessage] = useState<string>('');
+
+    // Confirm modals
+    const [slotDeleteConfirmOpen, setSlotDeleteConfirmOpen] = useState(false);
+    const [slotIdToDelete, setSlotIdToDelete] = useState<number | null>(null);
+    const [appCancelConfirmOpen, setAppCancelConfirmOpen] = useState(false);
+    const [appIdToCancel, setAppIdToCancel] = useState<number | null>(null);
+
     useEffect(() => {
         if (!user || !user.medicoId) { setLoading(false); return; }
         const headers = { Authorization: `Bearer ${user.token}` };
@@ -188,17 +198,25 @@ const MedicoDashboard = () => {
             const { data } = await axios.put(`${API_BASE_URL}/slots/${slotId}/toggle`, null, { headers: { Authorization: `Bearer ${user.token}` } });
             setSlots(prev => prev.map(s => s.id === slotId ? { ...s, stato: data.stato } : s));
         } catch {
-            alert('Errore nel modificare lo slot.');
+            setErrorModalMessage('Errore nel modificare lo slot.');
+            setErrorModalOpen(true);
         }
     };
-    const handleEliminaSlot = async (slotId: number) => {
-        if (!user) return;
-        if (!window.confirm('Eliminare questo slot?')) return;
+    const openEliminaSlotConfirm = (slotId: number) => {
+        setSlotIdToDelete(slotId);
+        setSlotDeleteConfirmOpen(true);
+    };
+    const confirmEliminaSlot = async () => {
+        if (!user || slotIdToDelete == null) { setSlotDeleteConfirmOpen(false); return; }
         try {
-            await axios.delete(`${API_BASE_URL}/slots/${slotId}`, { headers: { Authorization: `Bearer ${user.token}` } });
-            setSlots(prev => prev.filter(s => s.id !== slotId));
+            await axios.delete(`${API_BASE_URL}/slots/${slotIdToDelete}`, { headers: { Authorization: `Bearer ${user.token}` } });
+            setSlots(prev => prev.filter(s => s.id !== slotIdToDelete));
+            setSlotDeleteConfirmOpen(false);
+            setSlotIdToDelete(null);
         } catch {
-            alert('Errore: lo slot potrebbe essere già prenotato.');
+            setSlotDeleteConfirmOpen(false);
+            setErrorModalMessage('Errore: lo slot potrebbe essere già prenotato.');
+            setErrorModalOpen(true);
         }
     };
     const handleEliminaBlocco = async (bloccoId: number) => {
@@ -255,14 +273,22 @@ const MedicoDashboard = () => {
             setDeleteModalError(typeof msg === 'string' ? msg : JSON.stringify(msg));
         }
     };
-    const handleAnnullaAppuntamento = async (appuntamentoId: number) => {
+    const handleAnnullaAppuntamento = (appuntamentoId: number) => {
         if (!user) return;
-        if (!window.confirm('Vuoi annullare questo appuntamento?')) return;
+        setAppIdToCancel(appuntamentoId);
+        setAppCancelConfirmOpen(true);
+    };
+    const confirmAnnullaAppuntamento = async () => {
+        if (!user || appIdToCancel == null) { setAppCancelConfirmOpen(false); return; }
         try {
-            await axios.put(`${API_BASE_URL}/appuntamenti/medico/annulla/${appuntamentoId}`, null, { headers: { Authorization: `Bearer ${user.token}` } });
-            setAppuntamenti(prev => prev.map(a => a.id === appuntamentoId ? { ...a, stato: 'ANNULLATO' } : a));
+            await axios.put(`${API_BASE_URL}/appuntamenti/medico/annulla/${appIdToCancel}`, null, { headers: { Authorization: `Bearer ${user.token}` } });
+            setAppuntamenti(prev => prev.map(a => a.id === appIdToCancel ? { ...a, stato: 'ANNULLATO' } : a));
+            setAppCancelConfirmOpen(false);
+            setAppIdToCancel(null);
         } catch {
-            alert("Si è verificato un problema durante l'annullamento.");
+            setAppCancelConfirmOpen(false);
+            setErrorModalMessage("Si è verificato un problema durante l'annullamento.");
+            setErrorModalOpen(true);
         }
     };
 
@@ -671,7 +697,7 @@ const MedicoDashboard = () => {
                                                                                                         <button className="btn btn-sm btn-outline-secondary" onClick={() => handleToggleSlot(s.id)} disabled={s.stato === 'OCCUPATO'}>
                                                                                                             {s.stato === 'DISPONIBILE' ? 'Disabilita' : 'Abilita'}
                                                                                                         </button>
-                                                                                                        <button className="btn btn-sm btn-outline-danger" onClick={() => handleEliminaSlot(s.id)} disabled={s.stato === 'OCCUPATO'}>Elimina</button>
+                                                                                                        <button className="btn btn-sm btn-outline-danger" onClick={() => openEliminaSlotConfirm(s.id)} disabled={s.stato === 'OCCUPATO'}>Elimina</button>
                                                                                                     </div>
                                                                                                 </li>
                                                                                             ))}
@@ -914,12 +940,55 @@ const MedicoDashboard = () => {
                                     <Button variant="primary" onClick={() => setResSuccessOpen(false)}>OK</Button>
                                 </Modal.Footer>
                             </Modal>
+
+                            {/* Modal errore generico */}
+                            <Modal show={errorModalOpen} onHide={() => setErrorModalOpen(false)} centered>
+                                <Modal.Header closeButton>
+                                    <Modal.Title>Errore</Modal.Title>
+                                </Modal.Header>
+                                <Modal.Body>
+                                    {errorModalMessage || 'Si è verificato un errore inatteso.'}
+                                </Modal.Body>
+                                <Modal.Footer>
+                                    <Button variant="secondary" onClick={() => setErrorModalOpen(false)}>Chiudi</Button>
+                                </Modal.Footer>
+                            </Modal>
+
+                            {/* Conferma eliminazione slot */}
+                            <Modal show={slotDeleteConfirmOpen} onHide={() => setSlotDeleteConfirmOpen(false)} centered>
+                                <Modal.Header closeButton>
+                                    <Modal.Title>Elimina slot</Modal.Title>
+                                </Modal.Header>
+                                <Modal.Body>
+                                    Eliminare questo slot?
+                                </Modal.Body>
+                                <Modal.Footer>
+                                    <Button variant="secondary" onClick={() => setSlotDeleteConfirmOpen(false)}>Annulla</Button>
+                                    <Button variant="danger" onClick={confirmEliminaSlot}>Elimina</Button>
+                                </Modal.Footer>
+                            </Modal>
+
+                            {/* Conferma annullamento appuntamento */}
+                            <Modal show={appCancelConfirmOpen} onHide={() => setAppCancelConfirmOpen(false)} centered>
+                                <Modal.Header closeButton>
+                                    <Modal.Title>Annulla appuntamento</Modal.Title>
+                                </Modal.Header>
+                                <Modal.Body>
+                                    Vuoi annullare questo appuntamento?
+                                </Modal.Body>
+                                <Modal.Footer>
+                                    <Button variant="secondary" onClick={() => setAppCancelConfirmOpen(false)}>Indietro</Button>
+                                    <Button variant="danger" onClick={confirmAnnullaAppuntamento}>Annulla appuntamento</Button>
+                                </Modal.Footer>
+                            </Modal>
         </div>
     );
 };
 
 const DocsModal = ({ open, onClose, app, list, loading, token }:
     { open: boolean; onClose: () => void; app: Appuntamento | null; list: DocItem[]; loading: boolean; token?: string | null }) => {
+    const [docErrorOpen, setDocErrorOpen] = useState(false);
+    const [docErrorMessage, setDocErrorMessage] = useState('');
     const handleDownload = async (docId: number, filename: string) => {
         if (!app || !token) return;
         try {
@@ -936,7 +1005,8 @@ const DocsModal = ({ open, onClose, app, list, loading, token }:
             a.remove();
             URL.revokeObjectURL(blobUrl);
         } catch {
-            alert('Impossibile scaricare il documento.');
+            setDocErrorMessage('Impossibile scaricare il documento.');
+            setDocErrorOpen(true);
         }
     };
     return (
@@ -964,6 +1034,15 @@ const DocsModal = ({ open, onClose, app, list, loading, token }:
                         ))}
                     </ul>
                 ))}
+                <Modal show={docErrorOpen} onHide={() => setDocErrorOpen(false)} centered>
+                    <Modal.Header closeButton>
+                        <Modal.Title>Errore</Modal.Title>
+                    </Modal.Header>
+                    <Modal.Body>{docErrorMessage || 'Operazione non riuscita.'}</Modal.Body>
+                    <Modal.Footer>
+                        <Button variant="secondary" onClick={() => setDocErrorOpen(false)}>Chiudi</Button>
+                    </Modal.Footer>
+                </Modal>
             </Modal.Body>
             <Modal.Footer>
                 <Button variant="secondary" onClick={onClose}>Chiudi</Button>
