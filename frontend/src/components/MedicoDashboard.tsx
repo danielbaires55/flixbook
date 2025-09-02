@@ -96,6 +96,12 @@ const MedicoDashboard = () => {
     const [docTargetApp, setDocTargetApp] = useState<Appuntamento | null>(null);
     const [docList, setDocList] = useState<DocItem[]>([]);
     const [docLoading, setDocLoading] = useState(false);
+    // Referti (upload medico)
+    const [refertoModalOpen, setRefertoModalOpen] = useState(false);
+    const [refertoTargetApp, setRefertoTargetApp] = useState<Appuntamento | null>(null);
+    const [refertoFile, setRefertoFile] = useState<File | null>(null);
+    const [refertoLoading, setRefertoLoading] = useState(false);
+    const [refertoSuccessOpen, setRefertoSuccessOpen] = useState(false);
     // Reschedule modal
     const [resModalOpen, setResModalOpen] = useState(false);
     const [resTargetApp, setResTargetApp] = useState<Appuntamento | null>(null);
@@ -383,6 +389,29 @@ const MedicoDashboard = () => {
         } finally { setDocLoading(false); }
     };
 
+    const openRefertoUpload = (app: Appuntamento) => {
+        setRefertoTargetApp(app);
+        setRefertoFile(null);
+        setRefertoModalOpen(true);
+    };
+    const uploadReferto = async () => {
+        if (!user || !refertoTargetApp || !refertoFile) return;
+        try {
+            setRefertoLoading(true);
+            const form = new FormData();
+            form.append('file', refertoFile);
+            await axios.post(`${API_BASE_URL}/appuntamenti/${refertoTargetApp.id}/documenti`, form, {
+                headers: { Authorization: `Bearer ${user.token}` }
+            });
+            setRefertoModalOpen(false);
+            setRefertoTargetApp(null);
+            setRefertoSuccessOpen(true);
+        } catch {
+            setErrorModalMessage('Caricamento referto non riuscito.');
+            setErrorModalOpen(true);
+        } finally { setRefertoLoading(false); }
+    };
+
     // Filtro blocchi: aggiunte opzioni 'tutti' e 'settimana prossima'
     type BlocchiPreset = 'tutti' | 'oggi' | 'settimana' | 'settimana-prossima' | 'mese' | 'prossimo-mese';
     const [blocchiPreset, setBlocchiPreset] = useState<BlocchiPreset>('settimana');
@@ -507,6 +536,7 @@ const MedicoDashboard = () => {
                                                             {app.tipoAppuntamento === 'virtuale' && (
                                                                 <button className="btn btn-outline-secondary btn-sm" onClick={() => openDocs(app)}>Documenti</button>
                                                             )}
+                                                            <button className="btn btn-outline-success btn-sm" onClick={() => openRefertoUpload(app)} title="Carica referto per il paziente">Carica referto</button>
                                                             {app.tipoAppuntamento === 'fisico' && (
                                                                 <span className="badge text-bg-light align-self-center">
                                                                     {app.sedeNome || 'Sede —'}
@@ -940,6 +970,36 @@ const MedicoDashboard = () => {
                                 </Modal.Body>
                                 <Modal.Footer>
                                     <Button variant="primary" onClick={() => setResSuccessOpen(false)}>OK</Button>
+                                </Modal.Footer>
+                            </Modal>
+
+                            {/* Modal upload referto (medico) */}
+                            <Modal show={refertoModalOpen} onHide={() => setRefertoModalOpen(false)} centered>
+                                <Modal.Header closeButton>
+                                    <Modal.Title>Carica referto</Modal.Title>
+                                </Modal.Header>
+                                <Modal.Body>
+                                    <div className="mb-3">
+                                        <label className="form-label">Seleziona file (PDF/JPG/PNG)</label>
+                                        <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="form-control" onChange={(e) => setRefertoFile(e.target.files?.[0] || null)} disabled={refertoLoading} />
+                                    </div>
+                                </Modal.Body>
+                                <Modal.Footer>
+                                    <Button variant="secondary" onClick={() => setRefertoModalOpen(false)}>Annulla</Button>
+                                    <Button variant="primary" onClick={uploadReferto} disabled={!refertoFile || refertoLoading}>Carica</Button>
+                                </Modal.Footer>
+                            </Modal>
+
+                            {/* Modal successo referto */}
+                            <Modal show={refertoSuccessOpen} onHide={() => setRefertoSuccessOpen(false)} centered>
+                                <Modal.Header closeButton>
+                                    <Modal.Title>Referto caricato</Modal.Title>
+                                </Modal.Header>
+                                <Modal.Body>
+                                    Il referto è stato caricato e sarà visibile al paziente nella sezione Referti.
+                                </Modal.Body>
+                                <Modal.Footer>
+                                    <Button variant="primary" onClick={() => setRefertoSuccessOpen(false)}>OK</Button>
                                 </Modal.Footer>
                             </Modal>
 

@@ -130,6 +130,7 @@ const NavBar: FC<NavBarProps> = ({ onSpecialitaClick, onMediciClick, onContattiC
   <Link to="/" className={`nav-link-button${isActive('/')}`} onClick={() => setIsMobileMenuOpen(false)}>Homepage</Link>
   <Link to="/paziente-dashboard" className={`nav-link-button${isActive('/paziente-dashboard')}`} onClick={() => setIsMobileMenuOpen(false)}>I Miei Appuntamenti</Link>
   <Link to="/book" className={`nav-link-button${isActive('/book')}`} onClick={() => setIsMobileMenuOpen(false)}>Prenota</Link>
+  <Link to="/paziente/referti" className={`nav-link-button${isActive('/paziente/referti')}`} onClick={() => setIsMobileMenuOpen(false)}>Referti</Link>
   <Link to="/paziente/profilo" className={`nav-link-button${isActive('/paziente/profilo')}`} onClick={() => setIsMobileMenuOpen(false)}>Profilo</Link>
     </>
   );
