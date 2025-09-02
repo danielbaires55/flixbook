@@ -41,6 +41,8 @@ Dettagli
 1) Crea un DB vuoto (es. `flixbookdb`) sul tuo MySQL locale.
 2) Esporta le variabili d'ambiente (oppure lascia i default se hai root/root su 3306):
 
+mysql -u root -p -e "CREATE DATABASE flixbookdb CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;"
+
 ```bash
 export DB_HOST=localhost
 export DB_PORT=3306
