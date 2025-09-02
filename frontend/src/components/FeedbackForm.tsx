@@ -4,7 +4,7 @@ import { Container, Typography, Box, TextField, Button, Rating, Stack, Alert } f
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/useAuth'; // 1. Importa il nostro hook
 
-const API_BASE_URL = 'http://localhost:8080/api';
+import { API_BASE_URL } from '../config/api';
 
 const FeedbackForm = () => {
     const { appuntamentoId } = useParams<{ appuntamentoId: string }>();

@@ -3,7 +3,7 @@ import { Modal, Button } from 'react-bootstrap';
 import axios, { AxiosError } from 'axios';
 import { useAuth } from '../context/useAuth';
 
-const API_BASE_URL = 'http://localhost:8080/api';
+import { API_BASE_URL } from '../config/api';
 
 type Sede = { id: number; nome: string; indirizzo?: string; citta?: string; provincia?: string; cap?: string; telefono?: string; email?: string; lat?: number; lng?: number; attiva?: boolean };
 

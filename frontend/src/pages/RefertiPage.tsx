@@ -16,8 +16,7 @@ type Referto = {
   downloadUrl: string;
 };
 
-const API_BASE_URL = 'http://localhost:8080/api';
-const SERVER_BASE_URL = 'http://localhost:8080';
+import { API_BASE_URL, SERVER_BASE_URL } from '../config/api';
 
 export default function RefertiPage() {
   const { user } = useAuth();

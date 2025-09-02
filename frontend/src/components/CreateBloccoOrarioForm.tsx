@@ -9,7 +9,7 @@ import './css/CreateBloccoOrarioForm.css';
 import { Modal, Button, OverlayTrigger, Tooltip, Form } from 'react-bootstrap';
 import InfoModal from './InfoModal';
 
-const API_BASE_URL = 'http://localhost:8080/api';
+import { API_BASE_URL } from '../config/api';
 
 const CreateBloccoOrarioForm: FC = () => {
   const { user } = useAuth();

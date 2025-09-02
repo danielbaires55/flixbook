@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import './css/SpecialitaSection.css'; // Assicurati che il percorso al file CSS sia corretto
 
-const API_BASE_URL = 'http://localhost:8080/api'; // Per le chiamate API
-const SERVER_BASE_URL = 'http://localhost:8080'; // Per i file statici come le immagini
+import { API_BASE_URL, SERVER_BASE_URL } from '../config/api';
 
 // Interfaccia per i dati della specialità
 interface Specialita {

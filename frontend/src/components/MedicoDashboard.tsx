@@ -55,7 +55,7 @@ interface Appuntamento {
 interface DocItem { id: number; originalName: string }
 interface SlotLite { data: string; oraInizio: string | number; slotId?: number; sedeId?: number; sedeNome?: string }
 
-const API_BASE_URL = 'http://localhost:8080/api';
+import { API_BASE_URL } from '../config/api';
 const SERVER_BASE_URL = API_BASE_URL.replace(/\/api$/, '');
 
 const MedicoDashboard = () => {

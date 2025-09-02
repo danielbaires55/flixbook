@@ -3,7 +3,7 @@ import axios from 'axios';
 import { Link } from 'react-router-dom';
 import InfoModal from './InfoModal';
 
-const API_BASE_URL = 'http://localhost:8080/api';
+import { API_BASE_URL } from '../config/api';
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');

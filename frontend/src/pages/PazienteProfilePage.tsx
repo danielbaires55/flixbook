@@ -3,7 +3,7 @@ import axios from 'axios';
 import { useAuth } from '../context/useAuth';
 import 'bootstrap/dist/css/bootstrap.min.css';
 
-const API_BASE_URL = 'http://localhost:8080/api';
+import { API_BASE_URL } from '../config/api';
 
 // Interfaccia per i dati del profilo del paziente
 interface PazienteProfile {

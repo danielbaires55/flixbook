@@ -33,7 +33,7 @@ interface RefertoItem { id: number; originalName: string; mimeType?: string; fil
 interface SlotLite { data: string; oraInizio: string | number; slotId?: number; sedeId?: number; sedeNome?: string }
 
 const API_BASE_URL = "http://localhost:8080/api";
-const SERVER_BASE_URL = 'http://localhost:8080';
+import { SERVER_BASE_URL } from '../config/api';
 
 const PazienteDashboard = () => {
   const { user } = useAuth();
