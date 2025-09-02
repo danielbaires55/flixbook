@@ -1,20 +1,33 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
-import { Modal, Button } from 'react-bootstrap';
+import { Modal, Button, Form } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { useAuth } from '../context/useAuth';
 import './css/MedicoDashboard.css';
 
 // --- Interfacce ---
 interface Medico { id: number; nome: string; cognome: string; email: string; imgProfUrl?: string; imgUrl?: string }
-interface Paziente { id: number; nome: string; cognome: string }
-interface Prestazione { id: number; nome: string; costo: number }
+interface Paziente {
+    id: number;
+    nome: string;
+    cognome: string;
+    email?: string;
+    telefono?: string;
+    dataNascita?: string; // ISO date
+    indirizzo?: string;
+    citta?: string;
+    provincia?: string;
+    cap?: string;
+    codiceFiscale?: string;
+}
+interface Prestazione { id: number; nome: string; costo: number; tipoPrestazione?: 'fisico' | 'virtuale' }
 interface BloccoOrario {
     id: number;
     data: string;
     oraInizio: string;
     oraFine: string;
+    prestazioneIds?: number[];
     createdByType?: 'MEDICO' | 'COLLABORATORE';
     createdById?: number;
     createdByName?: string;
@@ -31,7 +44,16 @@ interface Appuntamento {
     medico: Medico;
     prestazione: Prestazione;
     linkVideocall?: string;
+    sedeId?: number;
+    sedeNome?: string;
+    sedeIndirizzo?: string;
+    sedeCitta?: string;
+    sedeProvincia?: string;
+    sedeCap?: string;
+    privacyConsenso?: boolean;
 }
+interface DocItem { id: number; originalName: string }
+interface SlotLite { data: string; oraInizio: string | number; slotId?: number; sedeId?: number; sedeNome?: string }
 
 const API_BASE_URL = 'http://localhost:8080/api';
 const SERVER_BASE_URL = API_BASE_URL.replace(/\/api$/, '');
@@ -43,6 +65,9 @@ const MedicoDashboard = () => {
     const [appuntamenti, setAppuntamenti] = useState<Appuntamento[]>([]);
     const [blocchiOrario, setBlocchiOrario] = useState<BloccoOrario[]>([]);
     const [prestazioniMedico, setPrestazioniMedico] = useState<Prestazione[]>([]);
+    type Sede = { id: number; nome: string };
+    const [sedi, setSedi] = useState<Sede[]>([]);
+    const [sedeFilterId, setSedeFilterId] = useState<number | ''>('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -50,6 +75,9 @@ const MedicoDashboard = () => {
     const [slots, setSlots] = useState<SlotItem[]>([]);
     const [slotsLoading, setSlotsLoading] = useState(false);
     const [slotsError, setSlotsError] = useState<string | null>(null);
+    // Patient info modal
+    const [patientModalOpen, setPatientModalOpen] = useState(false);
+    const [patientTarget, setPatientTarget] = useState<Paziente | null>(null);
 
         // Storico appuntamenti (modal + filtri basilari)
         const [showStoricoModal, setShowStoricoModal] = useState(false);
@@ -63,6 +91,37 @@ const MedicoDashboard = () => {
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
     const [deleteModalError, setDeleteModalError] = useState<string | null>(null);
     const [pendingDeleteBloccoId, setPendingDeleteBloccoId] = useState<number | null>(null);
+    // Docs modal (read-only)
+    const [docModalOpen, setDocModalOpen] = useState(false);
+    const [docTargetApp, setDocTargetApp] = useState<Appuntamento | null>(null);
+    const [docList, setDocList] = useState<DocItem[]>([]);
+    const [docLoading, setDocLoading] = useState(false);
+    // Referti (upload medico)
+    const [refertoModalOpen, setRefertoModalOpen] = useState(false);
+    const [refertoTargetApp, setRefertoTargetApp] = useState<Appuntamento | null>(null);
+    const [refertoFile, setRefertoFile] = useState<File | null>(null);
+    const [refertoLoading, setRefertoLoading] = useState(false);
+    const [refertoSuccessOpen, setRefertoSuccessOpen] = useState(false);
+    // Reschedule modal
+    const [resModalOpen, setResModalOpen] = useState(false);
+    const [resTargetApp, setResTargetApp] = useState<Appuntamento | null>(null);
+    const [resAllSlots, setResAllSlots] = useState<SlotLite[]>([]);
+    const [resSlots, setResSlots] = useState<SlotLite[]>([]);
+    const [resLoading, setResLoading] = useState(false);
+    const [resError, setResError] = useState<string | null>(null);
+    const [resSuccessOpen, setResSuccessOpen] = useState(false);
+    const [resSelectedSedeId, setResSelectedSedeId] = useState<number | ''>('');
+    const [resSediOptions, setResSediOptions] = useState<Array<{ id?: number; nome?: string }>>([]);
+
+    // Generic error modal
+    const [errorModalOpen, setErrorModalOpen] = useState(false);
+    const [errorModalMessage, setErrorModalMessage] = useState<string>('');
+
+    // Confirm modals
+    const [slotDeleteConfirmOpen, setSlotDeleteConfirmOpen] = useState(false);
+    const [slotIdToDelete, setSlotIdToDelete] = useState<number | null>(null);
+    const [appCancelConfirmOpen, setAppCancelConfirmOpen] = useState(false);
+    const [appIdToCancel, setAppIdToCancel] = useState<number | null>(null);
 
     useEffect(() => {
         if (!user || !user.medicoId) { setLoading(false); return; }
@@ -72,16 +131,19 @@ const MedicoDashboard = () => {
             try {
                 setLoading(true);
                 setError(null);
-                const [p, a, b, pr] = await Promise.all([
+                const [p, a, b, pr, sd] = await Promise.all([
                     axios.get(`${API_BASE_URL}/medici/profile`, { headers }),
                     axios.get(`${API_BASE_URL}/appuntamenti/medico/${medicoId}`, { headers }),
-                    axios.get(`${API_BASE_URL}/blocchi-orario/medico/${medicoId}`, { headers }),
+                    axios.get(`${API_BASE_URL}/blocchi-orario/medico/${medicoId}${sedeFilterId ? `?sedeId=${sedeFilterId}` : ''}`, { headers }),
                     axios.get(`${API_BASE_URL}/prestazioni/by-medico-loggato`, { headers }),
+                    axios.get(`${API_BASE_URL}/medici/sedi`, { headers }),
                 ]);
                 setProfile(p.data);
                 setAppuntamenti(a.data);
                 setBlocchiOrario(b.data);
                 setPrestazioniMedico(pr.data);
+                const list = (sd.data as { id: number; nome: string }[]).filter(s => s && typeof s.id === 'number');
+                setSedi(list);
             } catch (e) {
                 console.error('Errore nel recupero dei dati:', e);
                 setError('Impossibile caricare i dati.');
@@ -90,7 +152,7 @@ const MedicoDashboard = () => {
             }
         };
         fetchAll();
-    }, [user]);
+    }, [user, sedeFilterId]);
 
     const buildPhotoUrl = (m?: Medico | null): string | null => {
         if (!m) return null;
@@ -108,6 +170,17 @@ const MedicoDashboard = () => {
     const getInitials = (n?: string, c?: string) => `${(n?.[0] || '?').toUpperCase()}${(c?.[0] || '').toUpperCase()}`;
     const fmtTime = (d: Date) => `${d.getHours()}:${d.getMinutes().toString().padStart(2, '0')}`;
     const fmtHM = (t: string) => t?.split(':').slice(0, 2).join(':');
+
+    // Regola di visibilità del tasto Elimina per un blocco
+    const isBloccoDeletable = (b: BloccoOrario) => {
+        const inizio = new Date(`${b.data}T${b.oraInizio.length === 5 ? b.oraInizio + ':00' : b.oraInizio}`);
+        const fine = new Date(`${b.data}T${b.oraFine.length === 5 ? b.oraFine + ':00' : b.oraFine}`);
+        const hasAttivi = appuntamenti.some(a => a.stato === 'CONFERMATO' && new Date(a.dataEOraInizio) < fine && new Date(a.dataEOraFine) > inizio);
+        if (hasAttivi) return false;
+        const hasCompletati = appuntamenti.some(a => a.stato === 'COMPLETATO' && new Date(a.dataEOraInizio) < fine && new Date(a.dataEOraFine) > inizio);
+        if (hasCompletati && fine > new Date()) return false;
+        return true;
+    };
 
     const fetchSlotsForBlocco = async (bloccoId: number) => {
         if (!user) return;
@@ -131,38 +204,55 @@ const MedicoDashboard = () => {
             const { data } = await axios.put(`${API_BASE_URL}/slots/${slotId}/toggle`, null, { headers: { Authorization: `Bearer ${user.token}` } });
             setSlots(prev => prev.map(s => s.id === slotId ? { ...s, stato: data.stato } : s));
         } catch {
-            alert('Errore nel modificare lo slot.');
+            setErrorModalMessage('Errore nel modificare lo slot.');
+            setErrorModalOpen(true);
         }
     };
-    const handleEliminaSlot = async (slotId: number) => {
-        if (!user) return;
-        if (!window.confirm('Eliminare questo slot?')) return;
+    const openEliminaSlotConfirm = (slotId: number) => {
+        setSlotIdToDelete(slotId);
+        setSlotDeleteConfirmOpen(true);
+    };
+    const confirmEliminaSlot = async () => {
+        if (!user || slotIdToDelete == null) { setSlotDeleteConfirmOpen(false); return; }
         try {
-            await axios.delete(`${API_BASE_URL}/slots/${slotId}`, { headers: { Authorization: `Bearer ${user.token}` } });
-            setSlots(prev => prev.filter(s => s.id !== slotId));
+            await axios.delete(`${API_BASE_URL}/slots/${slotIdToDelete}`, { headers: { Authorization: `Bearer ${user.token}` } });
+            setSlots(prev => prev.filter(s => s.id !== slotIdToDelete));
+            setSlotDeleteConfirmOpen(false);
+            setSlotIdToDelete(null);
         } catch {
-            alert('Errore: lo slot potrebbe essere già prenotato.');
+            setSlotDeleteConfirmOpen(false);
+            setErrorModalMessage('Errore: lo slot potrebbe essere già prenotato.');
+            setErrorModalOpen(true);
         }
     };
     const handleEliminaBlocco = async (bloccoId: number) => {
         if (!user) return;
-        // Verifica pre-delete per slot occupati
+        // Verifica pre-delete: consenti l'eliminazione se NON ci sono appuntamenti attivi (CONFERMATI) nel range del blocco.
         try {
-            let hasBooked = false;
-            if (bloccoAperto === bloccoId && slots.length > 0) {
-                hasBooked = slots.some(s => s.stato === 'OCCUPATO');
-            } else {
-                const { data } = await axios.get(`${API_BASE_URL}/slots/blocchi/${bloccoId}`, { headers: { Authorization: `Bearer ${user.token}` } });
-                const fetchedSlots = (data as SlotItem[]) || [];
-                hasBooked = fetchedSlots.some(s => s.stato === 'OCCUPATO');
+            const blocco = blocchiOrario.find(b => b.id === bloccoId);
+            if (!blocco) {
+                setDeleteModalError('Blocco non trovato.');
+                setDeleteModalOpen(true);
+                return;
             }
-            if (hasBooked) {
-                setDeleteModalError('Non puoi eliminare questo blocco: ci sono appuntamenti già prenotati. Annulla prima gli appuntamenti collegati.');
+            const inizio = new Date(`${blocco.data}T${blocco.oraInizio.length === 5 ? blocco.oraInizio + ':00' : blocco.oraInizio}`);
+            const fine = new Date(`${blocco.data}T${blocco.oraFine.length === 5 ? blocco.oraFine + ':00' : blocco.oraFine}`);
+            const hasAttivi = appuntamenti.some(a => a.stato === 'CONFERMATO' && new Date(a.dataEOraInizio) < fine && new Date(a.dataEOraFine) > inizio);
+            if (hasAttivi) {
+                setDeleteModalError('Non puoi eliminare questo blocco: ci sono appuntamenti attivi (confermati) nel suo intervallo. Annulla o sposta prima tali appuntamenti.');
+                setDeleteModalOpen(true);
+                return;
+            }
+            // Se ci sono COMPLETATI e il blocco non è ancora terminato, blocca
+            const now = new Date();
+            const hasCompletati = appuntamenti.some(a => a.stato === 'COMPLETATO' && new Date(a.dataEOraInizio) < fine && new Date(a.dataEOraFine) > inizio);
+            if (hasCompletati && fine > now) {
+                setDeleteModalError('Puoi eliminare blocchi con appuntamenti completati solo dopo la fine del blocco (orario già passato).');
                 setDeleteModalOpen(true);
                 return;
             }
         } catch (e) {
-            console.error('Impossibile verificare gli slot del blocco prima della cancellazione:', e);
+            console.error('Impossibile verificare gli appuntamenti del blocco prima della cancellazione:', e);
             setDeleteModalError('Controllo non riuscito. Riprova più tardi.');
             setDeleteModalOpen(true);
             return;
@@ -189,15 +279,137 @@ const MedicoDashboard = () => {
             setDeleteModalError(typeof msg === 'string' ? msg : JSON.stringify(msg));
         }
     };
-    const handleAnnullaAppuntamento = async (appuntamentoId: number) => {
+    const handleAnnullaAppuntamento = (appuntamentoId: number) => {
         if (!user) return;
-        if (!window.confirm('Vuoi annullare questo appuntamento?')) return;
+        setAppIdToCancel(appuntamentoId);
+        setAppCancelConfirmOpen(true);
+    };
+    const confirmAnnullaAppuntamento = async () => {
+        if (!user || appIdToCancel == null) { setAppCancelConfirmOpen(false); return; }
         try {
-            await axios.put(`${API_BASE_URL}/appuntamenti/medico/annulla/${appuntamentoId}`, null, { headers: { Authorization: `Bearer ${user.token}` } });
-            setAppuntamenti(prev => prev.map(a => a.id === appuntamentoId ? { ...a, stato: 'ANNULLATO' } : a));
+            await axios.put(`${API_BASE_URL}/appuntamenti/medico/annulla/${appIdToCancel}`, null, { headers: { Authorization: `Bearer ${user.token}` } });
+            setAppuntamenti(prev => prev.map(a => a.id === appIdToCancel ? { ...a, stato: 'ANNULLATO' } : a));
+            setAppCancelConfirmOpen(false);
+            setAppIdToCancel(null);
         } catch {
-            alert("Si è verificato un problema durante l'annullamento.");
+            setAppCancelConfirmOpen(false);
+            setErrorModalMessage("Si è verificato un problema durante l'annullamento.");
+            setErrorModalOpen(true);
         }
+    };
+
+    const openReschedule = async (app: Appuntamento) => {
+        if (!user) return;
+        setResTargetApp(app);
+        setResModalOpen(true);
+        setResLoading(true);
+        setResError(null);
+    setResAllSlots([]);
+    setResSlots([]);
+    setResSediOptions([]);
+    setResSelectedSedeId(app.tipoAppuntamento === 'fisico' ? (app.sedeId ?? '') : '');
+        try {
+            const params: Record<string, string | number> = {
+                prestazioneId: app.prestazione.id,
+                medicoId: app.medico.id,
+                limit: 30,
+                fromDate: new Date().toISOString().slice(0,10),
+            };
+            const { data } = await axios.get<SlotLite[]>(`${API_BASE_URL}/slots/prossimi-disponibili`, { params });
+            const now = new Date();
+            const toIsoTime = (t: string | number) => {
+                if (typeof t === 'number') return `${t.toString().padStart(2,'0')}:00:00`;
+                const s = String(t);
+                return /^\d{2}:\d{2}$/.test(s) ? `${s}:00` : s; // accept HH:mm or HH:mm:ss
+            };
+            const filtered = data.filter(s => s.slotId).filter(s => {
+                const dt = new Date(`${s.data}T${toIsoTime(s.oraInizio)}`);
+                return dt.getTime() > now.getTime();
+            });
+            setResAllSlots(filtered);
+            const sediMap = new Map<number, string>();
+            for (const s of filtered) {
+                if (typeof s.sedeId === 'number') sediMap.set(s.sedeId, s.sedeNome || 'Sede');
+            }
+            setResSediOptions(Array.from(sediMap.entries()).map(([id, nome]) => ({ id, nome })));
+            if (app.tipoAppuntamento === 'fisico' && app.sedeId) setResSlots(filtered.filter(s => s.sedeId === app.sedeId));
+            else setResSlots(filtered);
+        } catch (e: unknown) {
+            const msg = (e as { response?: { data?: unknown } })?.response?.data;
+            setResError(typeof msg === 'string' ? msg : 'Impossibile caricare le disponibilità.');
+        } finally {
+            setResLoading(false);
+        }
+    };
+    const applySedeFilter = (sedeId: number | '') => {
+        setResSelectedSedeId(sedeId);
+        if (sedeId === '') { setResSlots(resAllSlots); return; }
+        setResSlots(resAllSlots.filter(s => s.sedeId === sedeId));
+    };
+    const doReschedule = async (slotId: number) => {
+        if (!user || !resTargetApp) return;
+        try {
+            await axios.put(`${API_BASE_URL}/appuntamenti/${resTargetApp.id}/sposta`, { slotId }, { headers: { Authorization: `Bearer ${user.token}` } });
+            // Refresh appointments list
+            const medicoId = user.medicoId;
+            const { data } = await axios.get(`${API_BASE_URL}/appuntamenti/medico/${medicoId}`, { headers: { Authorization: `Bearer ${user.token}` } });
+            setAppuntamenti(data);
+            setResModalOpen(false);
+            setResTargetApp(null);
+            setResSuccessOpen(true);
+        } catch (e: unknown) {
+            const msg = (e as { response?: { data?: unknown } })?.response?.data;
+            const raw = typeof msg === 'string' ? msg : 'Impossibile spostare: lo slot potrebbe non essere più disponibile.';
+            let friendly = raw;
+            if (/massimo di 2 volte/i.test(raw) || /numero massimo di 2/i.test(raw)) {
+                friendly = 'Il paziente ha raggiunto il numero massimo di 2 spostamenti per questo appuntamento.';
+            } else if (/24\s*ore/i.test(raw) || /24h/i.test(raw)) {
+                friendly = "Non è possibile spostare l'appuntamento nelle 24 ore precedenti all'orario previsto (regola lato paziente).";
+            }
+            setResError(friendly);
+        }
+    };
+
+    const openPatientInfo = (p: Paziente) => {
+        setPatientTarget(p);
+        setPatientModalOpen(true);
+    };
+
+    const openDocs = async (app: Appuntamento) => {
+        if (!user) return;
+        setDocTargetApp(app);
+        setDocModalOpen(true);
+        setDocLoading(true);
+        setDocList([]);
+        try {
+            const { data } = await axios.get(`${API_BASE_URL}/appuntamenti/${app.id}/documenti`, { headers: { Authorization: `Bearer ${user.token}` } });
+            setDocList(data);
+        } catch {
+            setDocList([]);
+        } finally { setDocLoading(false); }
+    };
+
+    const openRefertoUpload = (app: Appuntamento) => {
+        setRefertoTargetApp(app);
+        setRefertoFile(null);
+        setRefertoModalOpen(true);
+    };
+    const uploadReferto = async () => {
+        if (!user || !refertoTargetApp || !refertoFile) return;
+        try {
+            setRefertoLoading(true);
+            const form = new FormData();
+            form.append('file', refertoFile);
+            await axios.post(`${API_BASE_URL}/appuntamenti/${refertoTargetApp.id}/documenti`, form, {
+                headers: { Authorization: `Bearer ${user.token}` }
+            });
+            setRefertoModalOpen(false);
+            setRefertoTargetApp(null);
+            setRefertoSuccessOpen(true);
+        } catch {
+            setErrorModalMessage('Caricamento referto non riuscito.');
+            setErrorModalOpen(true);
+        } finally { setRefertoLoading(false); }
     };
 
     // Filtro blocchi: aggiunte opzioni 'tutti' e 'settimana prossima'
@@ -218,9 +430,19 @@ const MedicoDashboard = () => {
     if (error) return <div className="alert alert-danger mt-5">{error}</div>;
 
     return (
-        <div className="container my-5">
-            <div className="d-flex justify-content-between align-items-center mb-4">
+        <div className="container my-5 medico-dashboard">
+            <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
                 <h1 className="mb-0">La tua dashboard</h1>
+                <div className="d-flex align-items-center gap-2">
+                    <Form.Select size="sm" style={{maxWidth: 260}}
+                        value={sedeFilterId}
+                        onChange={(e) => setSedeFilterId(e.target.value ? Number(e.target.value) : '')}
+                    >
+                        <option value="">Tutte le sedi</option>
+                        {sedi.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
+                    </Form.Select>
+                    
+                </div>
             </div>
 
             <div className="row">
@@ -251,17 +473,19 @@ const MedicoDashboard = () => {
                                     return (
                                         <div className="d-flex align-items-center gap-2">
                                             <span className="badge text-bg-success">In agenda: {attiviCount}</span>
-                                                                    <button
-                                                                        type="button"
-                                                                        className="btn btn-sm btn-outline-secondary"
-                                                                        onClick={() => { setStoricoPage(1); setShowStoricoModal(true); }}
-                                                                        title="Mostra storico"
-                                                                    >
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16" aria-hidden>
-                                                    <path d="M8 3.5a.5.5 0 0 1 .5.5v4l3 1.5a.5.5 0 1 1-.5.866l-3.5-1.75A.5.5 0 0 1 7 8V4a.5.5 0 0 1 .5-.5" />
-                                                    <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m0-1A7 7 0 1 1 8 1a7 7 0 0 1 0 14" />
+                                            <button
+                                                type="button"
+                                                className="btn btn-outline-secondary btn-sm rounded-circle d-inline-flex align-items-center justify-content-center"
+                                                style={{ width: 34, height: 34, padding: 0, lineHeight: 1 }}
+                                                onClick={() => { setStoricoPage(1); setShowStoricoModal(true); }}
+                                                aria-label="Storico appuntamenti"
+                                                title={`Storico${storiciCount > 0 ? ` (${storiciCount})` : ''}`}
+                                            >
+                                                {/* history (circular arrow) icon, same as PazienteDashboard */}
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" aria-hidden>
+                                                    <path fill-rule="evenodd" d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 1 0-.908-.417A6 6 0 1 0 8 2v1z"/>
+                                                    <path d="M8 0a.5.5 0 0 1 .5.5V2h1a.5.5 0 0 1 0 1H7.5A.5.5 0 0 1 7 2.5v-2A.5.5 0 0 1 7.5 0h.5z"/>
                                                 </svg>
-                                                <span className="ms-1">Storico {storiciCount > 0 ? `(${storiciCount})` : ''}</span>
                                             </button>
                                         </div>
                                     );
@@ -279,12 +503,22 @@ const MedicoDashboard = () => {
                                                         <div className="d-flex w-100 justify-content-between">
                                                             <div>
                                                                 <strong>{new Date(app.dataEOraInizio).toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' })}</strong> alle <strong>{fmtTime(new Date(app.dataEOraInizio))}</strong>
-                                                                <br /><small className="text-muted">Paziente: {app.paziente.nome} {app.paziente.cognome}</small>
+                                                                <br /><small className="text-muted">Paziente: <button type="button" className="btn btn-link btn-sm p-0 align-baseline" onClick={() => openPatientInfo(app.paziente)}>{app.paziente.nome} {app.paziente.cognome}</button></small>
                                                                 <br /><small className="text-muted">Prestazione: {app.prestazione.nome}</small>
                                                                 {app.tipoAppuntamento === 'virtuale' && buildVideoUrl(app.linkVideocall) && (
                                                                     <>
                                                                         <br /><small className="text-muted">Videoconsulto: </small>
                                                                         <a href={buildVideoUrl(app.linkVideocall)!} target="_blank" rel="noopener noreferrer" className="small">{buildVideoUrl(app.linkVideocall)}</a>
+                                                                    </>
+                                                                )}
+                                                                {app.tipoAppuntamento === 'fisico' && (
+                                                                    <>
+                                                                        <br />
+                                                                        <small className="text-muted">
+                                                                            {app.sedeNome ? (
+                                                                                <>Sede: {app.sedeNome}{app.sedeIndirizzo ? ` — ${app.sedeIndirizzo}` : ''}{app.sedeCap || app.sedeCitta || app.sedeProvincia ? `, ${[app.sedeCap, app.sedeCitta, app.sedeProvincia && `(${app.sedeProvincia})`].filter(Boolean).join(' ')}` : ''}</>
+                                                                            ) : 'Sede: —'}
+                                                                        </small>
                                                                     </>
                                                                 )}
                                                             </div>
@@ -299,13 +533,25 @@ const MedicoDashboard = () => {
                                                                     Videoconsulto
                                                                 </a>
                                                             )}
+                                                            {app.tipoAppuntamento === 'virtuale' && (
+                                                                <button className="btn btn-outline-secondary btn-sm" onClick={() => openDocs(app)}>Documenti</button>
+                                                            )}
+                                                            <button className="btn btn-outline-success btn-sm" onClick={() => openRefertoUpload(app)} title="Carica referto per il paziente">Carica referto</button>
+                                                            {app.tipoAppuntamento === 'fisico' && (
+                                                                <span className="badge text-bg-light align-self-center">
+                                                                    {app.sedeNome || 'Sede —'}
+                                                                </span>
+                                                            )}
                                                             <button className="btn btn-danger btn-sm" onClick={() => handleAnnullaAppuntamento(app.id)}>Annulla</button>
+                                                            {app.stato === 'CONFERMATO' && (
+                                                                <button className="btn btn-outline-primary btn-sm" onClick={() => openReschedule(app)}>Sposta</button>
+                                                            )}
                                                         </div>
                                                     </li>
                                                 ))}
                                             </ul>
                                         ) : (
-                                            <div className="alert alert-info text-center mt-3">Nessun appuntamento attivo.</div>
+                                            <div className="empty-state text-center mt-3">Nessun appuntamento attivo.</div>
                                         )}
                                     </>
                                 );
@@ -413,22 +659,58 @@ const MedicoDashboard = () => {
                                                         <div className="d-flex justify-content-between align-items-start">
                                                             <div className="w-100">
                                                                 <strong>{dateLabel}</strong>
-                                                                <div className="d-flex flex-wrap gap-1 mt-2">
-                                                                    {prestazioniMedico.map(p => (
-                                                                        <span key={p.id} className="badge bg-light text-dark border">{p.nome}</span>
-                                                                    ))}
-                                                                </div>
+                                                                {/* RIMOSSA lista prestazioni globale per data per evitare confusione */}
                                                                 {blocks.map(b => (
                                                                     <div key={b.id} className="mt-3">
                                                                         <div className="d-flex align-items-center gap-2 flex-wrap">
                                                                             <span className="badge bg-light text-dark border">{fmtHM(b.oraInizio)}–{fmtHM(b.oraFine)}</span>
+                                                                            {(() => {
+                                                                                // Prestazioni per singolo blocco
+                                                                                const ids = b.prestazioneIds;
+                                                                                const selected = (!ids || ids.length === 0)
+                                                                                    ? prestazioniMedico
+                                                                                    : prestazioniMedico.filter(p => ids.includes(p.id));
+                                                                                const isAll = selected.length === prestazioniMedico.length;
+                                                                                if (isAll) {
+                                                                                    return <span className="badge bg-secondary">Tutte le prestazioni</span>;
+                                                                                }
+                                                                                // Mostra i nomi selezionati (limita a 6 badge max per leggibilità)
+                                                                                const max = 6;
+                                                                                const head = selected.slice(0, max);
+                                                                                const rest = selected.length - head.length;
+                                                                                return (
+                                                                                    <div className="d-flex flex-wrap gap-1">
+                                                                                        {head.map(p => (
+                                                                                            <span key={p.id} className="badge bg-light text-dark border">{p.nome}</span>
+                                                                                        ))}
+                                                                                        {rest > 0 && (
+                                                                                            <span className="badge text-bg-light">+{rest}</span>
+                                                                                        )}
+                                                                                    </div>
+                                                                                );
+                                                                            })()}
+                                                                            {(() => {
+                                                                                // Badge tipo blocco: Solo virtuali / Solo fisiche / Miste
+                                                                                const ids = b.prestazioneIds;
+                                                                                const selected = (!ids || ids.length === 0)
+                                                                                    ? prestazioniMedico
+                                                                                    : prestazioniMedico.filter(p => ids.includes(p.id));
+                                                                                if (!selected || selected.length === 0) return null;
+                                                                                const allVirtual = selected.every(p => p.tipoPrestazione === 'virtuale');
+                                                                                const allFisico = selected.every(p => (p.tipoPrestazione ?? 'fisico') === 'fisico');
+                                                                                const label = allVirtual ? 'Solo virtuali' : allFisico ? 'Solo fisiche' : 'Miste';
+                                                                                const cls = allVirtual ? 'text-bg-success' : allFisico ? 'text-bg-primary' : 'text-bg-warning';
+                                                                                return <span className={`badge ${cls}`}>{label}</span>;
+                                                                            })()}
                                                                             {b.createdByName && (
                                                                                 <span className="badge text-bg-secondary">Inserito da: {b.createdByName}{b.createdByType ? ` (${b.createdByType === 'COLLABORATORE' ? 'collaboratore' : 'medico'})` : ''}</span>
                                                                             )}
                                                                             <button className="btn btn-outline-primary btn-sm" onClick={() => handleApriChiudiSlot(b.id)}>
                                                                                 {bloccoAperto === b.id ? 'Nascondi slot' : 'Gestisci slot'}
                                                                             </button>
-                                                                            <button className="btn btn-outline-danger btn-sm" onClick={() => handleEliminaBlocco(b.id)}>Elimina</button>
+                                                                            {isBloccoDeletable(b) && (
+                                                                                <button className="btn btn-outline-danger btn-sm" onClick={() => handleEliminaBlocco(b.id)}>Elimina</button>
+                                                                            )}
                                                                         </div>
                                                                         {bloccoAperto === b.id && (
                                                                             <div className="mt-2 border rounded p-2 bg-light">
@@ -447,7 +729,7 @@ const MedicoDashboard = () => {
                                                                                                         <button className="btn btn-sm btn-outline-secondary" onClick={() => handleToggleSlot(s.id)} disabled={s.stato === 'OCCUPATO'}>
                                                                                                             {s.stato === 'DISPONIBILE' ? 'Disabilita' : 'Abilita'}
                                                                                                         </button>
-                                                                                                        <button className="btn btn-sm btn-outline-danger" onClick={() => handleEliminaSlot(s.id)} disabled={s.stato === 'OCCUPATO'}>Elimina</button>
+                                                                                                        <button className="btn btn-sm btn-outline-danger" onClick={() => openEliminaSlotConfirm(s.id)} disabled={s.stato === 'OCCUPATO'}>Elimina</button>
                                                                                                     </div>
                                                                                                 </li>
                                                                                             ))}
@@ -572,7 +854,7 @@ const MedicoDashboard = () => {
                                                         <div>
                                                             <strong>{new Date(app.dataEOraInizio).toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' })}</strong>
                                                             {' alle '}<strong>{new Date(app.dataEOraInizio).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}</strong>
-                                                            <br /><small className="text-muted">Paziente: {app.paziente.nome} {app.paziente.cognome}</small>
+                                                            <br /><small className="text-muted">Paziente: <button type="button" className="btn btn-link btn-sm p-0 align-baseline" onClick={() => openPatientInfo(app.paziente)}>{app.paziente.nome} {app.paziente.cognome}</button></small>
                                                             <br /><small className="text-muted">Prestazione: {app.prestazione.nome}</small>
                                                         </div>
                                                         <div className="d-flex flex-column align-items-end gap-2">
@@ -614,8 +896,256 @@ const MedicoDashboard = () => {
                                     )}
                                 </Modal.Footer>
                             </Modal>
+                            {/* Modal documenti appuntamento (solo lettura) */}
+                            <DocsModal
+                                open={docModalOpen}
+                                onClose={() => setDocModalOpen(false)}
+                                app={docTargetApp}
+                                list={docList}
+                                loading={docLoading}
+                                token={user?.token}
+                            />
+                            {/* Modal informazioni paziente */}
+                            <PatientInfoModal
+                                open={patientModalOpen}
+                                onClose={() => setPatientModalOpen(false)}
+                                paziente={patientTarget}
+                            />
+                            {/* Modal spostamento appuntamento */}
+                            <Modal show={resModalOpen} onHide={() => setResModalOpen(false)} centered>
+                                <Modal.Header closeButton>
+                                    <Modal.Title>Sposta appuntamento</Modal.Title>
+                                </Modal.Header>
+                                <Modal.Body>
+                                    {(() => { /* helper scope for formatting */ return null; })()}
+                                    {resTargetApp?.tipoAppuntamento === 'fisico' && (
+                                        <div className="mb-3">
+                                            <label className="form-label">Sede</label>
+                                            <select className="form-select" value={resSelectedSedeId === '' ? '' : resSelectedSedeId}
+                                                onChange={(e) => applySedeFilter(e.target.value ? Number(e.target.value) : '')}>
+                                                <option value="">Tutte le sedi</option>
+                                                {resSediOptions.map(s => (
+                                                    <option key={s.id} value={s.id}>{s.nome || `Sede ${s.id}`}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    )}
+                                     {resLoading ? <div>Caricamento disponibilità…</div> : resError ? <div className="alert alert-danger">{resError}</div> : (
+                                        resSlots.length === 0 ? <div className="text-muted">Nessuno slot disponibile.</div> : (
+                                            <ul className="list-group">
+                                                {resSlots.map((s, idx) => (
+                                                    <li key={idx} className="list-group-item d-flex justify-content-between align-items-center">
+                                                        <div>
+                                                            {(() => {
+                                                                const fmtIso = (t: string | number) => {
+                                                                    if (typeof t === 'number') return `${t.toString().padStart(2,'0')}:00:00`;
+                                                                    const ss = String(t);
+                                                                    return /^\d{2}:\d{2}$/.test(ss) ? `${ss}:00` : ss;
+                                                                };
+                                                                const iso = fmtIso(s.oraInizio);
+                                                                return (
+                                                                    <div><strong>{new Date(`${s.data}T${iso}`).toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' })}</strong> alle <strong>{iso.slice(0,5)}</strong></div>
+                                                                );
+                                                            })()}
+                                                            {s.sedeNome && <div className="small text-muted">Sede: {s.sedeNome}</div>}
+                                                        </div>
+                                                        <Button size="sm" onClick={() => s.slotId && doReschedule(s.slotId)} disabled={!s.slotId}>Scegli</Button>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        )
+                                    )}
+                                </Modal.Body>
+                                <Modal.Footer>
+                                    <Button variant="secondary" onClick={() => setResModalOpen(false)}>Chiudi</Button>
+                                </Modal.Footer>
+                            </Modal>
+                            {/* Modal successo spostamento */}
+                            <Modal show={resSuccessOpen} onHide={() => setResSuccessOpen(false)} centered>
+                                <Modal.Header closeButton>
+                                    <Modal.Title>Appuntamento spostato</Modal.Title>
+                                </Modal.Header>
+                                <Modal.Body>
+                                    L'appuntamento è stato spostato con successo.
+                                </Modal.Body>
+                                <Modal.Footer>
+                                    <Button variant="primary" onClick={() => setResSuccessOpen(false)}>OK</Button>
+                                </Modal.Footer>
+                            </Modal>
+
+                            {/* Modal upload referto (medico) */}
+                            <Modal show={refertoModalOpen} onHide={() => setRefertoModalOpen(false)} centered>
+                                <Modal.Header closeButton>
+                                    <Modal.Title>Carica referto</Modal.Title>
+                                </Modal.Header>
+                                <Modal.Body>
+                                    <div className="mb-3">
+                                        <label className="form-label">Seleziona file (PDF/JPG/PNG)</label>
+                                        <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="form-control" onChange={(e) => setRefertoFile(e.target.files?.[0] || null)} disabled={refertoLoading} />
+                                    </div>
+                                </Modal.Body>
+                                <Modal.Footer>
+                                    <Button variant="secondary" onClick={() => setRefertoModalOpen(false)}>Annulla</Button>
+                                    <Button variant="primary" onClick={uploadReferto} disabled={!refertoFile || refertoLoading}>Carica</Button>
+                                </Modal.Footer>
+                            </Modal>
+
+                            {/* Modal successo referto */}
+                            <Modal show={refertoSuccessOpen} onHide={() => setRefertoSuccessOpen(false)} centered>
+                                <Modal.Header closeButton>
+                                    <Modal.Title>Referto caricato</Modal.Title>
+                                </Modal.Header>
+                                <Modal.Body>
+                                    Il referto è stato caricato e sarà visibile al paziente nella sezione Referti.
+                                </Modal.Body>
+                                <Modal.Footer>
+                                    <Button variant="primary" onClick={() => setRefertoSuccessOpen(false)}>OK</Button>
+                                </Modal.Footer>
+                            </Modal>
+
+                            {/* Modal errore generico */}
+                            <Modal show={errorModalOpen} onHide={() => setErrorModalOpen(false)} centered>
+                                <Modal.Header closeButton>
+                                    <Modal.Title>Errore</Modal.Title>
+                                </Modal.Header>
+                                <Modal.Body>
+                                    {errorModalMessage || 'Si è verificato un errore inatteso.'}
+                                </Modal.Body>
+                                <Modal.Footer>
+                                    <Button variant="secondary" onClick={() => setErrorModalOpen(false)}>Chiudi</Button>
+                                </Modal.Footer>
+                            </Modal>
+
+                            {/* Conferma eliminazione slot */}
+                            <Modal show={slotDeleteConfirmOpen} onHide={() => setSlotDeleteConfirmOpen(false)} centered>
+                                <Modal.Header closeButton>
+                                    <Modal.Title>Elimina slot</Modal.Title>
+                                </Modal.Header>
+                                <Modal.Body>
+                                    Eliminare questo slot?
+                                </Modal.Body>
+                                <Modal.Footer>
+                                    <Button variant="secondary" onClick={() => setSlotDeleteConfirmOpen(false)}>Annulla</Button>
+                                    <Button variant="danger" onClick={confirmEliminaSlot}>Elimina</Button>
+                                </Modal.Footer>
+                            </Modal>
+
+                            {/* Conferma annullamento appuntamento */}
+                            <Modal show={appCancelConfirmOpen} onHide={() => setAppCancelConfirmOpen(false)} centered>
+                                <Modal.Header closeButton>
+                                    <Modal.Title>Annulla appuntamento</Modal.Title>
+                                </Modal.Header>
+                                <Modal.Body>
+                                    Vuoi annullare questo appuntamento?
+                                </Modal.Body>
+                                <Modal.Footer>
+                                    <Button variant="secondary" onClick={() => setAppCancelConfirmOpen(false)}>Indietro</Button>
+                                    <Button variant="danger" onClick={confirmAnnullaAppuntamento}>Annulla appuntamento</Button>
+                                </Modal.Footer>
+                            </Modal>
         </div>
     );
 };
 
+const DocsModal = ({ open, onClose, app, list, loading, token }:
+    { open: boolean; onClose: () => void; app: Appuntamento | null; list: DocItem[]; loading: boolean; token?: string | null }) => {
+    const [docErrorOpen, setDocErrorOpen] = useState(false);
+    const [docErrorMessage, setDocErrorMessage] = useState('');
+    const handleDownload = async (docId: number, filename: string) => {
+        if (!app || !token) return;
+        try {
+            const res = await axios.get(`${API_BASE_URL}/appuntamenti/${app.id}/documenti/${docId}`, {
+                headers: { Authorization: `Bearer ${token}` },
+                responseType: 'blob',
+            });
+            const blobUrl = URL.createObjectURL(res.data);
+            const a = document.createElement('a');
+            a.href = blobUrl;
+            a.download = filename || 'documento';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(blobUrl);
+        } catch {
+            setDocErrorMessage('Impossibile scaricare il documento.');
+            setDocErrorOpen(true);
+        }
+    };
+    return (
+        <Modal show={open} onHide={onClose} centered>
+            <Modal.Header closeButton>
+                <Modal.Title>
+                    Documenti del paziente
+                    {app && (
+                        <span className={`badge ms-2 ${app.privacyConsenso ? 'text-bg-success' : 'text-bg-secondary'}`} title="Consenso privacy per documenti">
+                            {app.privacyConsenso ? 'Consenso privacy: Sì' : 'Consenso privacy: No'}
+                        </span>
+                    )}
+                </Modal.Title>
+            </Modal.Header>
+            <Modal.Body>
+                {loading ? <div>Caricamento…</div> : (!list || list.length === 0 ? (
+                    <div className="text-muted">Nessun documento</div>
+                ) : (
+                    <ul className="list-group">
+                        {list.map(d => (
+                            <li key={d.id} className="list-group-item d-flex justify-content-between align-items-center">
+                                <span>{d.originalName}</span>
+                                <button className="btn btn-sm btn-outline-primary" onClick={() => handleDownload(d.id, d.originalName)}>Scarica</button>
+                            </li>
+                        ))}
+                    </ul>
+                ))}
+                <Modal show={docErrorOpen} onHide={() => setDocErrorOpen(false)} centered>
+                    <Modal.Header closeButton>
+                        <Modal.Title>Errore</Modal.Title>
+                    </Modal.Header>
+                    <Modal.Body>{docErrorMessage || 'Operazione non riuscita.'}</Modal.Body>
+                    <Modal.Footer>
+                        <Button variant="secondary" onClick={() => setDocErrorOpen(false)}>Chiudi</Button>
+                    </Modal.Footer>
+                </Modal>
+            </Modal.Body>
+            <Modal.Footer>
+                <Button variant="secondary" onClick={onClose}>Chiudi</Button>
+            </Modal.Footer>
+        </Modal>
+    );
+};
+
 export default MedicoDashboard;
+
+const FieldRow = ({ label, value }: { label: string; value?: string | null }) => (
+    <div className="row mb-2">
+        <div className="col-4 text-muted">{label}</div>
+        <div className="col-8">{value && value.trim() ? value : '—'}</div>
+    </div>
+);
+
+const PatientInfoModal = ({ open, onClose, paziente }: { open: boolean; onClose: () => void; paziente: Paziente | null }) => (
+    <Modal show={open} onHide={onClose} centered>
+        <Modal.Header closeButton>
+            <Modal.Title>Dettagli paziente</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+            {!paziente ? (
+                <div className="text-muted">Nessun paziente selezionato.</div>
+            ) : (
+                <div>
+                    <div className="mb-3"><strong>{paziente.nome} {paziente.cognome}</strong></div>
+                    <FieldRow label="Codice Fiscale" value={paziente.codiceFiscale} />
+                    <FieldRow label="Email" value={paziente.email} />
+                    <FieldRow label="Telefono" value={paziente.telefono} />
+                    <FieldRow label="Data di nascita" value={paziente.dataNascita ? new Date(paziente.dataNascita).toLocaleDateString('it-IT') : undefined} />
+                    <FieldRow label="Indirizzo" value={paziente.indirizzo} />
+                    <FieldRow label="Città" value={paziente.citta} />
+                    <FieldRow label="Provincia" value={paziente.provincia} />
+                    <FieldRow label="CAP" value={paziente.cap} />
+                </div>
+            )}
+        </Modal.Body>
+        <Modal.Footer>
+            <Button variant="secondary" onClick={onClose}>Chiudi</Button>
+        </Modal.Footer>
+    </Modal>
+);

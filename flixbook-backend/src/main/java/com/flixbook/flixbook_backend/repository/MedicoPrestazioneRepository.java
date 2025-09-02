@@ -10,4 +10,8 @@ import java.util.List;
 @Repository
 public interface MedicoPrestazioneRepository extends JpaRepository<MedicoPrestazione, MedicoPrestazioneId> {
     List<MedicoPrestazione> findByMedicoId(Long medicoId);
+
+    void deleteByMedicoIdAndPrestazioneIdIn(Long medicoId, List<Long> prestazioneIds);
+
+    void deleteByMedicoId(Long medicoId);
 }

@@ -21,8 +21,13 @@ import java.util.Optional;
 @Transactional
 public class MedicoService {
 
-    // Definisce il percorso dove verranno salvate le immagini del profilo
-    private final Path fileStorageLocation = Paths.get("src/main/resources/static/prof_img");
+    // Directory base per upload (configurabile via app.uploads.dir)
+    private final Path fileStorageLocation;
+
+    public MedicoService() {
+        // default to "uploads/prof_img" under project/workdir; served by StaticResourceConfig
+        this.fileStorageLocation = Paths.get("uploads", "prof_img").toAbsolutePath().normalize();
+    }
 
     @Autowired
     private MedicoRepository medicoRepository;
@@ -108,7 +113,15 @@ public class MedicoService {
             // Assicura che la cartella di destinazione esista
             Files.createDirectories(this.fileStorageLocation);
 
-            String fileName = "medico_" + medicoId + "_" + System.currentTimeMillis() + ".png";
+            String original = file.getOriginalFilename();
+            String ext = ".png";
+            if (original != null) {
+                String lower = original.toLowerCase();
+                if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) ext = ".jpg";
+                else if (lower.endsWith(".png")) ext = ".png";
+                else if (lower.endsWith(".webp")) ext = ".webp";
+            }
+            String fileName = "medico_" + medicoId + "_" + System.currentTimeMillis() + ext;
             Path targetLocation = this.fileStorageLocation.resolve(fileName);
             Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
             

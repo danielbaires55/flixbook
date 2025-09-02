@@ -125,4 +125,38 @@ public class AppuntamentoController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         }
     }
+
+    // ===================== Riprogramma/Appuntamento: variante 1 (by slotId) =====================
+    public record RescheduleRequest(Long slotId) {}
+
+    @PutMapping("/{appuntamentoId}/sposta")
+    public ResponseEntity<?> spostaAppuntamento(@PathVariable Long appuntamentoId,
+                                                @RequestBody RescheduleRequest body,
+                                                Authentication authentication) {
+        if (body == null || body.slotId() == null) {
+            return ResponseEntity.badRequest().body("slotId mancante");
+        }
+
+        CustomUserDetails user = (CustomUserDetails) authentication.getPrincipal();
+        String role = user.getAuthorities().iterator().next().getAuthority();
+
+        try {
+            Appuntamento updated = appuntamentoService.spostaAppuntamentoSuSlot(
+                appuntamentoId,
+                user.getUserId(),
+                authentication.getName(),
+                role,
+                body.slotId()
+            );
+            return ResponseEntity.ok(updated);
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
 }

@@ -23,15 +23,38 @@ public class BloccoOrarioController {
 
 
     @PostMapping("/create")
-    public ResponseEntity<?> createBloccoOrario(@RequestBody Map<String, String> payload, Authentication authentication) {
+    public ResponseEntity<?> createBloccoOrario(@RequestBody Map<String, Object> payload, Authentication authentication) {
         try {
             CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
             Long medicoId = userDetails.getMedicoId();
 
             // Estraiamo i dati direttamente dalla Map, senza DTO
-            LocalDate data = LocalDate.parse(payload.get("data"));
-            String oraInizio = payload.get("oraInizio");
-            String oraFine = payload.get("oraFine");
+            LocalDate data = LocalDate.parse(String.valueOf(payload.get("data")));
+            String oraInizio = String.valueOf(payload.get("oraInizio"));
+            String oraFine = String.valueOf(payload.get("oraFine"));
+            Long sedeId = null;
+            Object sedeIdObj = payload.get("sedeId");
+            if (sedeIdObj != null && !String.valueOf(sedeIdObj).isEmpty()) {
+                try { sedeId = Long.parseLong(String.valueOf(sedeIdObj)); } catch (NumberFormatException ignored) {}
+            }
+            // Optional: prestazioneIds as array
+            java.util.List<Long> prestazioneIds = null;
+            Object pid = payload.get("prestazioneIds");
+            if (pid instanceof java.util.List<?> list) {
+                prestazioneIds = new java.util.ArrayList<>();
+                for (Object o : list) {
+                    try {
+                        if (o instanceof Number n) {
+                            prestazioneIds.add(n.longValue());
+                        } else {
+                            String s = String.valueOf(o);
+                            if (s.endsWith(".0")) s = s.substring(0, s.length()-2);
+                            prestazioneIds.add(Long.parseLong(s));
+                        }
+                    } catch (Exception ignored) {}
+                }
+                if (prestazioneIds.isEmpty()) prestazioneIds = null; // treat empty as null => all
+            }
 
         String role = userDetails.getAuthorities().iterator().next().getAuthority();
         String createdByType = "ROLE_COLLABORATORE".equals(role) ? "COLLABORATORE" : "MEDICO";
@@ -45,7 +68,9 @@ public class BloccoOrarioController {
             oraFine,
             createdByType,
             createdById,
-            createdByName
+            createdByName,
+            sedeId,
+            prestazioneIds
         );
             return new ResponseEntity<>(bloccoCreato, HttpStatus.CREATED);
         } catch (IllegalStateException ise) {
@@ -57,14 +82,18 @@ public class BloccoOrarioController {
     }
 
     @GetMapping("/medico/{medicoId}")
-    public ResponseEntity<List<BloccoOrario>> getBlocchiByMedico(@PathVariable Long medicoId, Authentication authentication) {
+    public ResponseEntity<List<BloccoOrario>> getBlocchiByMedico(@PathVariable Long medicoId,
+                                                                 @RequestParam(value = "sedeId", required = false) Long sedeId,
+                                                                 Authentication authentication) {
     CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
 
         if (!Objects.equals(userDetails.getMedicoId(), medicoId)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
 
-        List<BloccoOrario> blocchi = bloccoOrarioService.findBlocchiFuturiByMedicoId(medicoId);
+        List<BloccoOrario> blocchi = (sedeId != null)
+            ? bloccoOrarioService.findBlocchiFuturiByMedicoIdAndSede(medicoId, sedeId)
+            : bloccoOrarioService.findBlocchiFuturiByMedicoId(medicoId);
         return ResponseEntity.ok(blocchi);
     }
 

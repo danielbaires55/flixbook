@@ -120,6 +120,8 @@
   box-shadow: 0 0 0 2px rgba(25, 135, 84, 0.5);
 }
 
+/* Slot count badge removed as per UX decision */
+
 /* Two-column lists styling */
 .list-group .list-group-item {
   transition: background-color 0.12s ease-in-out, transform 0.06s ease-in-out;

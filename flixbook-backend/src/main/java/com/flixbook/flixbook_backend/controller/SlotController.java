@@ -33,12 +33,13 @@ public class SlotController {
     public ResponseEntity<List<Map<String, Object>>> getProssimiSlot(
             @RequestParam Long prestazioneId,
             @RequestParam(required = false) Long medicoId,
+            @RequestParam(required = false) Long sedeId,
             @RequestParam(required = false) Integer limit,
             @RequestParam(required = false) java.time.LocalDate fromDate,
             @RequestParam(required = false) java.time.LocalDate toDate,
             @RequestParam(required = false) Integer fromHour,
             @RequestParam(required = false) Integer toHour) {
-        List<Map<String, Object>> slots = slotService.findProssimiSlotDisponibili(prestazioneId, medicoId, limit, fromDate, toDate, fromHour, toHour);
+        List<Map<String, Object>> slots = slotService.findProssimiSlotDisponibili(prestazioneId, medicoId, sedeId, limit, fromDate, toDate, fromHour, toHour);
         return ResponseEntity.ok(slots);
     }
     
@@ -47,8 +48,9 @@ public class SlotController {
     public ResponseEntity<List<Map<String, Object>>> getSlotsByDay(
             @RequestParam Long prestazioneId,
             @RequestParam LocalDate data,
-            @RequestParam(required = false) Long medicoId) {
-        List<Map<String, Object>> slots = slotService.findSlotsForDay(prestazioneId, medicoId, data);
+            @RequestParam(required = false) Long medicoId,
+            @RequestParam(required = false) Long sedeId) {
+        List<Map<String, Object>> slots = slotService.findSlotsForDay(prestazioneId, medicoId, sedeId, data);
         return ResponseEntity.ok(slots);
     }
 

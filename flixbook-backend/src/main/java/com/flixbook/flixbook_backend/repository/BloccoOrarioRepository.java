@@ -20,4 +20,12 @@ public interface BloccoOrarioRepository extends JpaRepository<BloccoOrario, Long
 
     // Aggiungi questo metodo
     List<BloccoOrario> findByMedicoIdAndDataGreaterThanEqualOrderByDataAsc(Long medicoId, LocalDate data);
+
+    List<BloccoOrario> findByMedicoIdAndSede_IdAndDataGreaterThanEqualOrderByDataAsc(Long medicoId, Long sedeId, LocalDate data);
+
+    List<BloccoOrario> findByMedicoIdAndSede_IdAndData(Long medicoId, Long sedeId, LocalDate data);
+
+    long countByMedicoId(Long medicoId);
+
+    long deleteByMedicoId(Long medicoId);
 }

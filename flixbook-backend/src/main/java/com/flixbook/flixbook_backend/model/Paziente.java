@@ -43,4 +43,8 @@ public class Paziente {
     private String cap;
     
     private String ruolo = "ROLE_PAZIENTE";
+
+    // Codice Fiscale (opzionale ma consigliato)
+    @Column(name = "codice_fiscale", length = 32)
+    private String codiceFiscale;
 }

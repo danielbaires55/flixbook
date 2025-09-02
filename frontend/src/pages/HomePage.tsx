@@ -10,7 +10,7 @@ export default function HomePage() {
   // I tuoi riferimenti (corretti)
   const specialitaRef = useRef<HTMLDivElement>(null);
   const mediciRef = useRef<HTMLDivElement>(null);
-  const contattiRef = useRef<HTMLDivElement>(null); // Lo attaccheremo al Footer
+  const contattiRef = useRef<HTMLDivElement>(null); 
 
 
   // La tua funzione per scorrere (corretta)

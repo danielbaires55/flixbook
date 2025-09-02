@@ -11,6 +11,8 @@ interface Medico {
   cognome: string;
   biografia: string;
   imgProfUrl: string; // Il percorso dell'immagine
+  avgRating?: number | null;
+  ratingCount?: number;
 }
 
 // 2. Aggiorniamo DoctorCard per usare i dati reali, inclusa l'immagine
@@ -31,6 +33,16 @@ function DoctorCard({ medico }: DoctorCardProps) {
         />
       </div>
       <div className="doctor-name">{medico.nome} {medico.cognome}</div>
+      <div className="doctor-rating" style={{marginTop: 4, color: '#f5a623'}}>
+        {medico.avgRating != null && medico.avgRating > 0 ? (
+          <span>
+            {"★".repeat(Math.round(medico.avgRating))}
+            {"☆".repeat(5 - Math.round(medico.avgRating))}
+          </span>
+        ) : (
+          <span style={{ color: '#666' }}>Nessuna valutazione</span>
+        )}
+      </div>
       <div className="doctor-description">{medico.biografia}</div>
     </div>
   );
@@ -47,7 +59,7 @@ function MediciSection() {
     const fetchMedici = async () => {
       try {
         setLoading(true);
-        const response = await axios.get<Medico[]>(`${API_BASE_URL}/medici`);
+  const response = await axios.get<Medico[]>(`${API_BASE_URL}/medici/withRatings`);
         setMedici(response.data);
       } catch (err) {
         setError('Impossibile caricare la lista dei medici.');

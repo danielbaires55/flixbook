@@ -36,4 +36,9 @@ public interface SlotRepository extends JpaRepository<Slot, Long> {
     @Modifying
     @Query("delete from Slot s where s.stato = :stato and s.dataEOraFine < :cutoff and not exists (select 1 from Appuntamento a where a.slot = s)")
     int deleteUnreferencedByStatoAndDataEOraFineBefore(@Param("stato") SlotStato stato, @Param("cutoff") LocalDateTime cutoff);
+
+    long countByMedico_Id(Long medicoId);
+
+    long deleteByMedico_Id(Long medicoId);
+    long deleteByBloccoOrario_IdIn(List<Long> bloccoIds);
 }

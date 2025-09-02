@@ -2,6 +2,9 @@ package com.flixbook.flixbook_backend.model;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.LocalDateTime;
@@ -40,4 +43,24 @@ public class BloccoOrario {
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sede_id")
+    private Sede sede;
+
+    // Prestazioni consentite per questo blocco; se vuoto o null => tutte le prestazioni del medico
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "blocco_orario_prestazioni",
+        joinColumns = @JoinColumn(name = "blocco_orario_id"),
+        inverseJoinColumns = @JoinColumn(name = "prestazione_id")
+    )
+    @JsonIgnore // evitiamo cicli e payload grandi; esponiamo solo gli ID sotto
+    private Set<Prestazione> prestazioniConsentite;
+
+    @Transient
+    public Set<Long> getPrestazioneIds() {
+        if (prestazioniConsentite == null) return null;
+        return prestazioniConsentite.stream().map(Prestazione::getId).collect(Collectors.toSet());
+    }
 }

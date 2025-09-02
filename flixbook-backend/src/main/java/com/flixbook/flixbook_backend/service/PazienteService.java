@@ -59,6 +59,10 @@ public class PazienteService {
         paziente.setCitta((String) datiProfilo.get("citta"));
         paziente.setProvincia((String) datiProfilo.get("provincia"));
         paziente.setCap((String) datiProfilo.get("cap"));
+        if (datiProfilo.containsKey("codiceFiscale")) {
+            Object cf = datiProfilo.get("codiceFiscale");
+            paziente.setCodiceFiscale(cf != null ? cf.toString() : null);
+        }
         
         return pazienteRepository.save(paziente);
     }

@@ -2,12 +2,14 @@ package com.flixbook.flixbook_backend.service;
 
 import com.flixbook.flixbook_backend.config.CustomUserDetails;
 import com.flixbook.flixbook_backend.model.Collaboratore;
+import com.flixbook.flixbook_backend.model.Admin;
 import com.flixbook.flixbook_backend.model.Medico;
 import com.flixbook.flixbook_backend.model.Paziente;
 import com.flixbook.flixbook_backend.repository.CollaboratoreRepository;
 import org.springframework.jdbc.core.JdbcTemplate;
 import com.flixbook.flixbook_backend.repository.MedicoRepository;
 import com.flixbook.flixbook_backend.repository.PazienteRepository;
+import com.flixbook.flixbook_backend.repository.AdminRepository;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -22,16 +24,31 @@ public class CustomUserDetailsService implements UserDetailsService {
     private final PazienteRepository pazienteRepository;
     private final CollaboratoreRepository collaboratoreRepository;
     private final JdbcTemplate jdbcTemplate;
+    private final AdminRepository adminRepository;
 
-    public CustomUserDetailsService(MedicoRepository medicoRepository, PazienteRepository pazienteRepository, CollaboratoreRepository collaboratoreRepository, JdbcTemplate jdbcTemplate) {
+    public CustomUserDetailsService(MedicoRepository medicoRepository, PazienteRepository pazienteRepository, CollaboratoreRepository collaboratoreRepository, JdbcTemplate jdbcTemplate, AdminRepository adminRepository) {
         this.medicoRepository = medicoRepository;
         this.pazienteRepository = pazienteRepository;
         this.collaboratoreRepository = collaboratoreRepository;
         this.jdbcTemplate = jdbcTemplate;
+        this.adminRepository = adminRepository;
     }
 
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
+        // --- Cerca un Admin ---
+        Admin admin = adminRepository.findByEmail(email).orElse(null);
+        if (admin != null) {
+            return new CustomUserDetails(
+                admin.getEmail(),
+                admin.getPasswordHash(),
+                Collections.singletonList(new SimpleGrantedAuthority("ROLE_ADMIN")),
+                admin.getId(),
+                null,
+                Collections.emptyList(),
+                null
+            );
+        }
         // --- Cerca il Medico ---
         Medico medico = medicoRepository.findByEmail(email).orElse(null);
         if (medico != null) {

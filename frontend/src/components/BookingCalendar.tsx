@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
 import "bootstrap/dist/css/bootstrap.min.css";
@@ -29,7 +29,11 @@ interface Medico {
   nome: string;
   cognome: string;
   imgProfUrl?: string;
+  avgRating?: number | null;
+  ratingCount?: number;
 }
+
+interface Sede { id: number; nome: string; lat?: number; lng?: number }
 
 interface SlotDisponibile {
   data: string;
@@ -37,6 +41,12 @@ interface SlotDisponibile {
   medicoId: number;
   medicoNome: string;
   medicoCognome: string;
+  sedeId?: number;
+  sedeNome?: string;
+  sedeIndirizzo?: string;
+  sedeCitta?: string;
+  sedeProvincia?: string;
+  sedeCap?: string;
 }
 
 const BookingCalendar: React.FC = () => {
@@ -47,10 +57,26 @@ const BookingCalendar: React.FC = () => {
   const [specialitaList, setSpecialitaList] = useState<Specialita[]>([]);
   const [prestazioniList, setPrestazioniList] = useState<Prestazione[]>([]);
   const [mediciList, setMediciList] = useState<Medico[]>([]);
+  const [sediList, setSediList] = useState<Sede[]>([]);
 
   const [selectedSpecialitaId, setSelectedSpecialitaId] = useState<string>("");
   const [selectedPrestazioneId, setSelectedPrestazioneId] = useState<string>("");
   const [selectedMedicoId, setSelectedMedicoId] = useState<string>("");
+  const [selectedSedeId, setSelectedSedeId] = useState<string>("");
+
+  // Prestazione selezionata e natura (virtuale/fisico)
+  const selectedPrestazioneObj = useMemo(
+    () => prestazioniList.find((p) => p.id === parseInt(selectedPrestazioneId || "0")),
+    [prestazioniList, selectedPrestazioneId]
+  );
+  const isVirtualSelected = selectedPrestazioneObj?.tipoPrestazione === "virtuale";
+
+  // Quando la prestazione selezionata è virtuale, azzera il filtro Sede per evitare residui
+  useEffect(() => {
+    if (isVirtualSelected && selectedSedeId) {
+      setSelectedSedeId("");
+    }
+  }, [isVirtualSelected, selectedSedeId]);
 
   // Stati per il calendario e la nuova lista di slot
   const [selectedDate] = useState<Date>(new Date());
@@ -69,9 +95,16 @@ const BookingCalendar: React.FC = () => {
   const [loadingSlots, setLoadingSlots] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  // Suggestion: nearest sede based on geolocation
+  const [suggestedSede, setSuggestedSede] = useState<{ sede: Sede; distanceKm: number } | null>(null);
+  const [geoError, setGeoError] = useState<string | null>(null);
+  const [locating, setLocating] = useState<boolean>(false);
+  // Preferred sede auto-apply
+  const [preferredSedeId, setPreferredSedeId] = useState<string>("");
   // Help UI states
   const [showHelpToast, setShowHelpToast] = useState<boolean>(false);
   const [showHelpModal, setShowHelpModal] = useState<boolean>(false);
+  const [helpDontShowAgain, setHelpDontShowAgain] = useState<boolean>(false);
   // Conferma prenotazione
   const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
   const [pendingSlot, setPendingSlot] = useState<SlotDisponibile | null>(null);
@@ -94,22 +127,23 @@ const BookingCalendar: React.FC = () => {
     return `http://localhost:8080/${url}`;
   };
 
-  // Carica i giorni con almeno una disponibilità nel mese visibile (se prestazione + medico selezionati)
+  // Carica i giorni con almeno una disponibilità nel mese visibile (prestazione obbligatoria, medico opzionale)
   const caricaGiorniDisponibiliMese = useCallback(async (activeDate: Date) => {
-    if (!selectedPrestazioneId || !selectedMedicoId) {
+    if (!selectedPrestazioneId) {
       setAvailableDaysSet(new Set());
       return;
     }
     try {
       const monthStart = new Date(activeDate.getFullYear(), activeDate.getMonth(), 1);
       const monthEnd = new Date(activeDate.getFullYear(), activeDate.getMonth() + 1, 0);
-      const params: Record<string, string | number> = {
+  const params: Record<string, string | number> = {
         prestazioneId: selectedPrestazioneId,
         medicoId: selectedMedicoId,
         fromDate: toYYYYMMDD(monthStart),
         toDate: toYYYYMMDD(monthEnd),
         limit: 1000, // sufficiente per un mese
       };
+  if (!isVirtualSelected && selectedSedeId) params.sedeId = selectedSedeId; // sede ignorata per prestazioni virtuali
       // Aggiungi filtro orario coerente con la tendina (inline per evitare deps del callback)
       if (timeFilter === "morning") { params.fromHour = 9; params.toHour = 12; }
       else if (timeFilter === "afternoon") { params.fromHour = 13; params.toHour = 17; }
@@ -120,13 +154,15 @@ const BookingCalendar: React.FC = () => {
       }
       const { data } = await axios.get<SlotDisponibile[]>(`${API_BASE_URL}/slots/prossimi-disponibili`, { params });
       const days = new Set<string>();
-      for (const s of data) days.add(s.data);
+      for (const s of data) {
+        days.add(s.data);
+      }
       setAvailableDaysSet(days);
     } catch {
       // Silenzioso: l'evidenziazione è "best-effort"
       setAvailableDaysSet(new Set());
     }
-  }, [selectedPrestazioneId, selectedMedicoId, timeFilter]);
+  }, [selectedPrestazioneId, selectedMedicoId, timeFilter, selectedSedeId, isVirtualSelected]);
 
   // Caricamento iniziale delle specialità
   useEffect(() => {
@@ -134,6 +170,10 @@ const BookingCalendar: React.FC = () => {
       .get<Specialita[]>(`${API_BASE_URL}/specialita`)
       .then((response) => setSpecialitaList(response.data))
       .catch((error) => console.error("Errore nel recupero delle specialità", error));
+    axios
+      .get<Sede[]>(`${API_BASE_URL}/sedi`)
+      .then((response) => setSediList(response.data))
+      .catch(() => setSediList([]));
   }, []);
 
   // Mostra un aiuto automatico la prima volta (una sola volta per sessione)
@@ -168,6 +208,83 @@ const BookingCalendar: React.FC = () => {
     }
   }, [selectedSpecialitaId]);
 
+  // Load preferred sede from storage once
+  useEffect(() => {
+    try {
+      const pref = localStorage.getItem('preferred_sede_id') || '';
+      setPreferredSedeId(pref);
+    } catch { /* ignore */ }
+  }, []);
+
+  // Auto-apply preferred sede when selecting una prestazione fisica e nessuna sede scelta
+  useEffect(() => {
+    if (!selectedPrestazioneId || isVirtualSelected) return;
+    if (selectedSedeId) return;
+    if (!preferredSedeId) return;
+    const exists = sediList.some(s => String(s.id) === String(preferredSedeId));
+    if (exists) setSelectedSedeId(String(preferredSedeId));
+  }, [selectedPrestazioneId, isVirtualSelected, selectedSedeId, preferredSedeId, sediList]);
+
+  // Handler opzionale: geolocalizza su richiesta e suggerisce la sede più vicina
+  const handleFindNearestSede = async () => {
+    setGeoError(null);
+    setSuggestedSede(null);
+    if (!selectedPrestazioneId || isVirtualSelected) return;
+    if (!sediList || sediList.length === 0) return;
+    const toNum = (v: unknown) => {
+      if (typeof v === 'number') return v;
+      if (typeof v === 'string') {
+        const s = v.trim().replace(',', '.');
+        const n = parseFloat(s);
+        return Number.isFinite(n) ? n : NaN;
+      }
+      return NaN;
+    };
+    const valid = sediList
+      .map(s => ({ ...s, lat: toNum(s.lat as unknown), lng: toNum(s.lng as unknown) }))
+      .filter(s => Number.isFinite(s.lat as number) && Number.isFinite(s.lng as number));
+    if (valid.length === 0) { setGeoError('Coordinate sedi non disponibili.'); return; }
+    const haversine = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+      const toRad = (x: number) => (x * Math.PI) / 180;
+      const R = 6371; // km
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    };
+    const compute = (coords: { latitude: number; longitude: number }) => {
+      try { sessionStorage.setItem('geo_last_pos', JSON.stringify(coords)); } catch { /* ignore */ }
+      const distances = valid.map(s => ({ sede: s, distanceKm: haversine(coords.latitude, coords.longitude, s.lat as number, s.lng as number) }));
+      distances.sort((a, b) => a.distanceKm - b.distanceKm);
+      const best = distances[0];
+      setSuggestedSede(best ? { sede: best.sede, distanceKm: Math.round(best.distanceKm * 10) / 10 } : null);
+    };
+    if (!('geolocation' in navigator)) {
+      // fallback su cache se geolocalizzazione non disponibile
+      const cached = sessionStorage.getItem('geo_last_pos');
+      if (cached) {
+        try { compute(JSON.parse(cached)); return; } catch { /* ignore */ }
+      }
+      setGeoError('Geolocalizzazione non supportata.');
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { setLocating(false); setGeoError(null); compute({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }); },
+      (err) => {
+        setLocating(false);
+        // Se fallisce, prova con la cache
+        const cached = sessionStorage.getItem('geo_last_pos');
+        if (cached) {
+          try { compute(JSON.parse(cached)); return; } catch { /* ignore */ }
+        }
+        setGeoError(err?.message || 'Impossibile ottenere la posizione');
+      },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 8000 }
+    );
+  };
+
   // Caricamento medici quando cambia la prestazione
   useEffect(() => {
     if (selectedPrestazioneId) {
@@ -176,7 +293,7 @@ const BookingCalendar: React.FC = () => {
       setSelectedMedicoId("");
 
       axios
-        .get<Medico[]>(`${API_BASE_URL}/medici/byPrestazione/${selectedPrestazioneId}`)
+        .get<Medico[]>(`${API_BASE_URL}/medici/byPrestazione/${selectedPrestazioneId}/withRatings`)
         .then((response) => {
           setMediciList(response.data);
         })
@@ -218,7 +335,8 @@ const BookingCalendar: React.FC = () => {
         params.fromHour = parseInt(sh, 10);
         params.toHour = parseInt(eh, 10);
       }
-      const { data } = await axios.get<SlotDisponibile[]>(`${API_BASE_URL}/slots/prossimi-disponibili`, { params });
+  if (!isVirtualSelected && selectedSedeId) params.sedeId = selectedSedeId; // sede ignorata per prestazioni virtuali
+  const { data } = await axios.get<SlotDisponibile[]>(`${API_BASE_URL}/slots/prossimi-disponibili`, { params });
       // Ordina cronologicamente per sicurezza
       const ordinati = [...data].sort((a, b) => {
         const da = new Date(`${a.data}T${a.oraInizio}`);
@@ -232,7 +350,7 @@ const BookingCalendar: React.FC = () => {
     } finally {
       setLoadingSlots(false);
     }
-  }, [selectedPrestazioneId, selectedMedicoId, selectedDateFilter, selectedDateToFilter, timeFilter]);
+  }, [selectedPrestazioneId, selectedMedicoId, selectedDateFilter, selectedDateToFilter, timeFilter, selectedSedeId, isVirtualSelected]);
 
   // Helper per caricare gli slot del giorno corrente del filtro
   const caricaSlotPerDataSelezionata = useCallback(async () => {
@@ -240,12 +358,13 @@ const BookingCalendar: React.FC = () => {
     setLoadingSlots(true);
     setError(null);
     try {
-      const params: Record<string, string> = {
+  const params: Record<string, string | number> = {
         prestazioneId: selectedPrestazioneId,
         data: toYYYYMMDD(selectedDateFilter),
       };
       if (selectedMedicoId) params.medicoId = selectedMedicoId;
-      const { data } = await axios.get<SlotDisponibile[]>(`${API_BASE_URL}/slots/available-by-day`, { params });
+  if (!isVirtualSelected && selectedSedeId) params.sedeId = selectedSedeId; // sede ignorata per prestazioni virtuali
+  const { data } = await axios.get<SlotDisponibile[]>(`${API_BASE_URL}/slots/available-by-day`, { params });
       const ordinati = [...data].sort((a, b) => {
         const da = new Date(`${a.data}T${a.oraInizio}`);
         const db = new Date(`${b.data}T${b.oraInizio}`);
@@ -258,7 +377,7 @@ const BookingCalendar: React.FC = () => {
     } finally {
       setLoadingSlots(false);
     }
-  }, [selectedPrestazioneId, selectedDateFilter, selectedMedicoId]);
+  }, [selectedPrestazioneId, selectedDateFilter, selectedMedicoId, selectedSedeId, isVirtualSelected]);
 
   // Caricamento slot quando cambia prestazione o medico: rispetta singolo giorno o range
   useEffect(() => {
@@ -271,7 +390,7 @@ const BookingCalendar: React.FC = () => {
     } else {
       caricaPrimeVisite();
     }
-  }, [selectedPrestazioneId, selectedMedicoId, selectedDateFilter, selectedDateToFilter, caricaPrimeVisite, caricaSlotPerDataSelezionata]);
+  }, [selectedPrestazioneId, selectedMedicoId, selectedDateFilter, selectedDateToFilter, selectedSedeId, caricaPrimeVisite, caricaSlotPerDataSelezionata]);
 
   // Applica filtro per data (via modal) caricando gli slot del giorno
   const applicaFiltroData = async () => {
@@ -474,14 +593,96 @@ const BookingCalendar: React.FC = () => {
                     disabled={!selectedPrestazioneId}
                   >
                     <option value="">Tutti i medici disponibili</option>
-          {mediciList.map((m) => (
-                      <option key={m.id} value={m.id}>
-            Dott. {m.nome} {m.cognome}
-                      </option>
-                    ))}
+                    {mediciList.map((m) => {
+                      const r = m.avgRating ?? null;
+                      const stars = r ? ` (${"★".repeat(Math.round(r))}${"☆".repeat(5 - Math.round(r))} · ${m.ratingCount})` : " (nessuna valutazione)";
+                      return (
+                        <option key={m.id} value={m.id}>
+                          Dott. {m.nome} {m.cognome}{stars}
+                        </option>
+                      );
+                    })}
                   </select>
                   <div className="form-text">Lascia vuoto per vedere tutti i medici</div>
                 </div>
+
+                {!isVirtualSelected && (
+                  <div className="col-md-4">
+                    <label className="form-label fw-semibold mb-1">Sede</label>
+                    <select
+                      className="form-select"
+                      onChange={(e) => setSelectedSedeId(e.target.value)}
+                      value={selectedSedeId}
+                      disabled={!selectedPrestazioneId}
+                    >
+                      <option value="">Tutte le sedi</option>
+                      {sediList.map((s) => (
+                        <option key={s.id} value={s.id}>{s.nome}</option>
+                      ))}
+                    </select>
+                    {preferredSedeId && !isVirtualSelected && (
+                      <div className="form-text mt-1">
+                        Sede predefinita impostata
+                        <button
+                          type="button"
+                          className="btn btn-link btn-sm ms-2 p-0 align-baseline"
+                          onClick={() => { try { localStorage.removeItem('preferred_sede_id'); } catch { /* ignore */ } setPreferredSedeId(""); }}
+                        >
+                          Rimuovi preferenza
+                        </button>
+                      </div>
+                    )}
+                    <div className="d-flex align-items-center gap-2 mt-2">
+                      <button
+                        type="button"
+                        className="btn btn-outline-secondary btn-sm"
+                        disabled={!selectedPrestazioneId || isVirtualSelected || locating}
+                        onClick={handleFindNearestSede}
+                        title="Trova la sede più vicina a me"
+                      >
+                        {locating ? (
+                          <>
+                            <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden></span>
+                            Cercando…
+                          </>
+                        ) : (
+                          <>
+                            {/* geo-alt icon */}
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16" aria-hidden className="me-1">
+                              <path d="M12.166 8.94c-.524 1.062-1.234 2.12-1.96 3.058A31.493 31.493 0 0 1 8 14.58a31.49 31.49 0 0 1-2.206-2.582c-.726-.937-1.436-1.996-1.96-3.058C3.304 7.867 3 6.862 3 6a5 5 0 1 1 10 0c0 .862-.304 1.867-.834 2.94M8 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4"/>
+                            </svg>
+                            Trova la sede più vicina a me
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    {selectedPrestazioneId && !selectedSedeId && suggestedSede && (
+                      <div className="form-text mt-2">
+                        Vicino a te: <strong>{suggestedSede.sede.nome}</strong>
+                        {Number.isFinite(suggestedSede.distanceKm) && (
+                          <span> (~{suggestedSede.distanceKm} km)</span>
+                        )}
+                        <button
+                          type="button"
+                          className="btn btn-link btn-sm ms-2 p-0 align-baseline"
+                          onClick={() => setSelectedSedeId(String(suggestedSede.sede.id))}
+                        >
+                          Usa questa sede
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-link btn-sm ms-2 p-0 align-baseline"
+                          onClick={() => { try { localStorage.setItem('preferred_sede_id', String(suggestedSede.sede.id)); } catch { /* ignore */ } setPreferredSedeId(String(suggestedSede.sede.id)); setSelectedSedeId(String(suggestedSede.sede.id)); }}
+                        >
+                          Imposta automaticamente
+                        </button>
+                      </div>
+                    )}
+                    {geoError && !selectedSedeId && (
+                      <div className="form-text text-muted mt-2">Suggerimento sede non disponibile: {geoError}</div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Sezione filtri rapidi */}
@@ -525,10 +726,10 @@ const BookingCalendar: React.FC = () => {
                 <div className="card mt-4">
                   <div className="card-header bg-white">
                     <div className="d-flex justify-content-between align-items-center" style={{gap: 12}}>
-                      <span className="fw-semibold">Prime visite disponibili (max 30)</span>
+          <span className="fw-semibold">Prime visite disponibili (max 30)</span>
             {selectedMedicoId && (
                         <small className="text-muted">
-              Filtrato per: Dott. {mediciList.find(m => m.id === parseInt(selectedMedicoId))?.nome} {mediciList.find(m => m.id === parseInt(selectedMedicoId))?.cognome}
+        {(() => { const mm = mediciList.find(m => m.id === parseInt(selectedMedicoId)); if (!mm) return ""; const r = mm.avgRating ?? null; const stars = r ? ` (${"★".repeat(Math.round(r))}${"☆".repeat(5 - Math.round(r))} · ${mm.ratingCount})` : " (nessuna valutazione)"; return `Filtrato per: Dott. ${mm.nome} ${mm.cognome}${stars}`; })()}
                         </small>
                       )}
                       {selectedDateToFilter && selectedDateFilter ? (
@@ -643,6 +844,9 @@ const BookingCalendar: React.FC = () => {
                                     day: "2-digit",
                                   })}
                                   <span className="badge rounded-pill text-bg-light ms-2">{slot.oraInizio.slice(0,5)}</span>
+                                  {slot.sedeNome && (
+                                    <span className="ms-2">• {slot.sedeNome}</span>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -746,16 +950,50 @@ const BookingCalendar: React.FC = () => {
                 </Modal.Header>
                 <Modal.Body>
                   <ol className="mb-3">
-                    <li>Seleziona la <strong>specialità</strong> e poi la <strong>prestazione</strong>.</li>
-                    <li>(Opzionale) Scegli un <strong>medico</strong> specifico, oppure lascia "Tutti i medici".</li>
-                    <li>Usa <strong>Filtra per data</strong> per scegliere una <em>data</em> o un <em>intervallo</em>.
-                      I giorni in <span className="text-success">verde</span> indicano disponibilità del medico selezionato.</li>
-                    <li>Seleziona un <strong>orario</strong> (mattina/pomeriggio/fascia). Con un filtro orario attivo compare un piccolo <strong>pallino</strong> nei giorni con disponibilità.</li>
-                    <li>Tra le <strong>prime visite</strong> elencate (max 30), clicca <strong>Prenota</strong>.</li>
+                    <li>
+                      Seleziona la <strong>specialità</strong> e poi la <strong>prestazione</strong>.
+                      Per le prestazioni <em>virtuali</em> il filtro sede è disattivato; per quelle <em>in presenza</em> puoi scegliere la <strong>sede</strong>.
+                    </li>
+                    <li>
+                      (Opzionale) Scegli un <strong>medico</strong> specifico. Accanto al nome vedi le <strong>stelle</strong> (media delle valutazioni) o la scritta “nessuna valutazione”.
+                    </li>
+                    <li>
+                      Premi <strong>Filtra per data</strong> per scegliere una <em>data</em> o un <em>intervallo</em>.
+                      I giorni in <span className="text-success">verde</span> hanno disponibilità; se imposti anche un filtro <strong>orario</strong>, vedrai un <strong>pallino</strong> nei giorni compatibili.
+                    </li>
+                    <li>
+                      (Opzionale) Filtra per <strong>orario</strong> (mattina, pomeriggio o fascia), oppure lascia “Tutto il giorno”.
+                    </li>
+                    <li>
+                      Seleziona una <strong>sede</strong> per le visite in presenza. Puoi usare “<em>Trova la sede più vicina a me</em>” e, se vuoi, impostarla come preferita.
+                    </li>
+                    <li>
+                      Scorri le <strong>prime visite</strong> elencate (max 30) e clicca <strong>Prenota</strong>; conferma nel riepilogo.
+                    </li>
                   </ol>
-                  <small className="text-muted">Suggerimento: lascia vuoto il medico per vedere più disponibilità.</small>
+                  <div className="text-muted small">
+                    Suggerimenti:
+                    <ul className="mt-1 mb-0">
+                      <li>Lascia il medico non selezionato per vedere più disponibilità.</li>
+                      <li>Per prenotare devi essere autenticato: se non lo sei, verrai indirizzato alla pagina di accesso.</li>
+                      <li>Dopo la prenotazione riceverai un’email di conferma con invito calendario (ICS) e link Google Calendar.</li>
+                      <li>Puoi <strong>spostare</strong> o <strong>annullare</strong> dalla tua Dashboard, rispettando le policy (max 2 spostamenti, non nelle 24h precedenti).</li>
+                    </ul>
+                  </div>
                 </Modal.Body>
-                <Modal.Footer>
+                <Modal.Footer className="d-flex justify-content-between align-items-center">
+                  <label className="form-check m-0 d-inline-flex align-items-center gap-2">
+                    <input
+                      type="checkbox"
+                      className="form-check-input"
+                      checked={helpDontShowAgain}
+                      onChange={(e) => {
+                        setHelpDontShowAgain(e.target.checked);
+                        try { localStorage.setItem('booking_help_seen', e.target.checked ? '1' : ''); } catch { /* ignore */ }
+                      }}
+                    />
+                    <span className="form-check-label">Non mostrare più</span>
+                  </label>
                   <Button variant="primary" onClick={() => setShowHelpModal(false)}>Ho capito</Button>
                 </Modal.Footer>
               </Modal>
@@ -794,7 +1032,18 @@ const BookingCalendar: React.FC = () => {
                           )}
                         </div>
                         {prestazione?.tipoPrestazione === 'fisico' && (
-                          <div className="small text-muted">Indirizzo: Via del Benessere, 10 - 20121 Milano (MI)</div>
+                          <div className="small text-muted">
+                            Sede: {pendingSlot.sedeNome ?? '-'}
+                            {pendingSlot.sedeIndirizzo && (
+                              <>
+                                <br />
+                                Indirizzo: {pendingSlot.sedeIndirizzo}
+                                {pendingSlot.sedeCap || pendingSlot.sedeCitta || pendingSlot.sedeProvincia ? (
+                                  <> — {pendingSlot.sedeCap ?? ''} {pendingSlot.sedeCitta ?? ''}{pendingSlot.sedeProvincia ? ` (${pendingSlot.sedeProvincia})` : ''}</>
+                                ) : null}
+                              </>
+                            )}
+                          </div>
                         )}
                         <div className="alert alert-info mb-0">
                           Confermando verrà prenotato lo slot selezionato. Potrai vedere i dettagli nella tua dashboard.

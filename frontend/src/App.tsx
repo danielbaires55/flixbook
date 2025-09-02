@@ -18,6 +18,10 @@ import CreateBloccoOrarioForm from "./components/CreateBloccoOrarioForm";
 import DashboardLayout from "./components/DashboardLayout";
 import MedicoProfiloPage from "./pages/MedicoProfiloPage";
 import PazienteProfiloPage from "./pages/PazienteProfilePage";
+import RefertiPage from "./pages/RefertiPage";
+import AdminMediciPage from "./pages/AdminMediciPage";
+import AdminSediPage from "./pages/AdminSediPage";
+import AdminUtentiOpsPage from "./pages/AdminUtentiOpsPage";
 
 type ProtectedRouteProps = {
   children: React.ReactNode;
@@ -56,7 +60,7 @@ function App() {
         <Route
           element={
             <ProtectedRoute
-              allowedRoles={["ROLE_MEDICO", "ROLE_COLLABORATORE"]}
+              allowedRoles={["ROLE_MEDICO", "ROLE_COLLABORATORE", "ROLE_ADMIN"]}
             >
               <DashboardLayout />
             </ProtectedRoute>
@@ -72,6 +76,10 @@ function App() {
             element={<CreateBloccoOrarioForm />}
           />
           <Route path="/medico/profilo" element={<MedicoProfiloPage />} />
+          {/* Admin */}
+          <Route path="/admin/medici" element={<AdminMediciPage />} />
+          <Route path="/admin/sedi" element={<AdminSediPage />} />
+          <Route path="/admin/ops" element={<AdminUtentiOpsPage />} />
         </Route>
 
         <Route
@@ -83,6 +91,7 @@ function App() {
         >
           {/* Queste sono ora le pagine "figlie" del layout del paziente */}
           <Route path="/paziente-dashboard" element={<PazienteDashboard />} />
+          <Route path="/paziente/referti" element={<RefertiPage />} />
           <Route path="/feedback/:appuntamentoId" element={<FeedbackForm />} />
 
           {/* AGGIUNGI LA NUOVA ROTTA QUI */}
