@@ -182,11 +182,13 @@
   width: 100%;
   margin-top: 20px;
   display: flex;
-  align-items: center;
+  align-items: baseline; /* baseline per allineare testo e link */
   justify-content: center;
+  gap: 6px; /* piccolo spazio tra testo e link */
   font-family: Inter, -apple-system, Roboto, Helvetica, sans-serif;
   font-size: 15px;
   font-weight: 700;
+  line-height: 1.4;
 }
 
 .registration-text {
@@ -202,8 +204,11 @@
   font-size: inherit;
   font-weight: inherit;
   text-decoration: underline;
-  padding: 4px 8px;
-  min-height: 44px;
+  padding: 0; /* rimuove padding che disallinea verticalmente */
+  min-height: 0; /* niente altezza minima così resta in linea */
+  line-height: 1.4;
+  display: inline; /* comportarsi come testo inline */
+  vertical-align: baseline;
   transition: color 0.2s ease;
   -webkit-tap-highlight-color: transparent;
 }

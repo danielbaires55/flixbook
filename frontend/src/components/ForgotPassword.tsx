@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { FloatingLabel, Form } from 'react-bootstrap';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
 import InfoModal from './InfoModal';
@@ -34,13 +35,23 @@ export default function ForgotPassword() {
   return (
     <div className="container py-5" style={{maxWidth: 480}}>
       <h1 className="h3 mb-3">Recupero password</h1>
-  <form onSubmit={onSubmit} className="card p-3 shadow-sm">
-        <label className="form-label">Email</label>
-        <input type="email" required className="form-control" value={email} onChange={e=>setEmail(e.target.value)} placeholder="La tua email" />
-        <button className="btn btn-primary mt-3" type="submit">Invia link</button>
+      <form onSubmit={onSubmit} className="card p-3 shadow-sm">
+        <FloatingLabel controlId="forgotEmail" label="Email">
+          <Form.Control
+            type="email"
+            required
+            value={email}
+            onChange={e=>setEmail(e.target.value)}
+            placeholder="name@example.com"
+            autoComplete="email"
+            aria-describedby="forgot-help"
+          />
+        </FloatingLabel>
+        <div id="forgot-help" className="form-text">Ti invieremo un link per reimpostare la password.</div>
+        <button className="btn btn-primary mt-3 w-auto d-block mx-auto px-4" type="submit">Invia link</button>
       </form>
       <div className="mt-3"><Link to="/login">Torna al login</Link></div>
-  <InfoModal show={modal.show} title={modal.title} message={modal.message} variant={modal.variant} onClose={closeModal} />
+      <InfoModal show={modal.show} title={modal.title} message={modal.message} variant={modal.variant} onClose={closeModal} />
     </div>
   );
 }

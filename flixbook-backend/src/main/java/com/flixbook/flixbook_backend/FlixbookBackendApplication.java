@@ -16,7 +16,6 @@ public class FlixbookBackendApplication {
 
 	@PostConstruct
 	public void init() {
-		// FORZA L'INTERA APPLICAZIONE A USARE IL FUSO ORARIO ITALIANO
 		TimeZone.setDefault(TimeZone.getTimeZone("Europe/Rome"));
 	}
 }
