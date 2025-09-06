@@ -87,9 +87,10 @@ public class CustomUserDetailsService implements UserDetailsService {
             var managed = jdbcTemplate.query("SELECT medico_id FROM collaboratori_medici WHERE collaboratore_id = ?",
                     (rs, rowNum) -> rs.getLong(1), collaboratore.getId());
             if (managed == null || managed.isEmpty()) {
-                managed = Collections.singletonList(collaboratore.getMedico().getId());
+                // Nessuna associazione => utente senza medici gestiti
+                managed = Collections.emptyList();
             }
-            Long acting = managed.get(0);
+            Long acting = managed.isEmpty() ? null : managed.get(0);
             return new CustomUserDetails(
                 collaboratore.getEmail(),
                 collaboratore.getPasswordHash(),

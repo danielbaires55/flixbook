@@ -7,6 +7,8 @@ import "./css/BookingCalendar.css";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/useAuth";
 import { Modal, Button, Toast, ToastContainer, OverlayTrigger, Tooltip } from "react-bootstrap";
+// Lightweight map embed component (iframe-based)
+import SedeMapEmbed from "./SedeMapEmbed.tsx";
 import NavBar from "./NavBar";
 
 const API_BASE_URL = "http://localhost:8080/api";
@@ -33,7 +35,14 @@ interface Medico {
   ratingCount?: number;
 }
 
-interface Sede { id: number; nome: string; lat?: number; lng?: number }
+interface Sede {
+  id: number; nome: string;
+  indirizzo?: string | null;
+  citta?: string | null;
+  provincia?: string | null;
+  cap?: string | null;
+  lat?: number; lng?: number;
+}
 
 interface SlotDisponibile {
   data: string;
@@ -109,6 +118,9 @@ const BookingCalendar: React.FC = () => {
   const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
   const [pendingSlot, setPendingSlot] = useState<SlotDisponibile | null>(null);
   const [bookingSubmitting, setBookingSubmitting] = useState<boolean>(false);
+  // Mappa sede
+  const [showMapModal, setShowMapModal] = useState<boolean>(false);
+  const [mapSede, setMapSede] = useState<{ nome: string; indirizzo?: string | null; lat: number; lng: number } | null>(null);
 
   const toYYYYMMDD = (date: Date): string => {
     const offset = date.getTimezoneOffset();
@@ -816,6 +828,8 @@ const BookingCalendar: React.FC = () => {
                         const initials = `${slot.medicoNome?.[0] || ''}${slot.medicoCognome?.[0] || ''}`.toUpperCase();
                         const medico = mediciList.find(m => m.id === slot.medicoId);
                         const photoUrl = buildPhotoUrl(medico?.imgProfUrl || null);
+                        const sedeForSlot = slot.sedeId ? sediList.find(s => s.id === slot.sedeId) : null;
+                        const hasCoords = sedeForSlot && typeof sedeForSlot.lat === 'number' && typeof sedeForSlot.lng === 'number';
                         return (
                           <li
                             key={`${slot.data}-${slot.oraInizio}-${slot.medicoId}`}
@@ -834,18 +848,37 @@ const BookingCalendar: React.FC = () => {
                               ) : (
                                 <div className="avatar-circle" aria-hidden>{initials || 'DR'}</div>
                               )}
-                              <div>
+                              <div className="d-flex flex-column">
                                 <div className="fw-semibold">Dott. {slot.medicoNome} {slot.medicoCognome}</div>
-                                <div className="text-muted small">
-                                  {isOggi ? "Oggi" : dataSlot.toLocaleDateString("it-IT", {
-                                    weekday: "long",
-                                    year: "numeric",
-                                    month: "2-digit",
-                                    day: "2-digit",
-                                  })}
-                                  <span className="badge rounded-pill text-bg-light ms-2">{slot.oraInizio.slice(0,5)}</span>
+                                <div className="text-muted small d-flex flex-wrap align-items-center" style={{gap:4}}>
+                                  <span>
+                                    {isOggi ? "Oggi" : dataSlot.toLocaleDateString("it-IT", {
+                                      weekday: "long",
+                                      year: "numeric",
+                                      month: "2-digit",
+                                      day: "2-digit",
+                                    })}
+                                  </span>
+                                  <span className="badge rounded-pill text-bg-light">{slot.oraInizio.slice(0,5)}</span>
                                   {slot.sedeNome && (
-                                    <span className="ms-2">• {slot.sedeNome}</span>
+                                    <>
+                                      <span>• {slot.sedeNome}</span>
+                                      {hasCoords && (
+                                        <button
+                                          type="button"
+                                          className="btn btn-link btn-sm p-0 ms-1"
+                                          onClick={() => {
+                                            if (sedeForSlot) {
+                                              setMapSede({ nome: sedeForSlot.nome, indirizzo: sedeForSlot.indirizzo, lat: sedeForSlot.lat as number, lng: sedeForSlot.lng as number });
+                                              setShowMapModal(true);
+                                            }
+                                          }}
+                                          title="Mostra mappa"
+                                        >
+                                          Mappa
+                                        </button>
+                                      )}
+                                    </>
                                   )}
                                 </div>
                               </div>
@@ -1073,6 +1106,17 @@ const BookingCalendar: React.FC = () => {
         </div>
       </div>
     </div>
+    {/* Modal mappa sede */}
+  <Modal show={showMapModal} onHide={() => setShowMapModal(false)} centered size="lg" backdrop="static">
+      <Modal.Header closeButton>
+        <Modal.Title>Mappa sede {mapSede?.nome}</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        {mapSede ? (
+          <SedeMapEmbed lat={mapSede.lat} lng={mapSede.lng} indirizzo={mapSede.indirizzo} />
+        ) : <div className="text-muted">Nessuna sede selezionata.</div>}
+      </Modal.Body>
+    </Modal>
     </>
   );
 };

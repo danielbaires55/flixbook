@@ -106,6 +106,11 @@ public class JwtUtil {
                 .parseClaimsJws(token)
                 .getBody();
     }
+
+    // Espone le claims per uso nel filtro (gestione ExpiredJwtException esterna)
+    public Claims parseClaims(String token) {
+        return extractAllClaims(token);
+    }
     
     private String createToken(Map<String, Object> claims, String subject) {
         return Jwts.builder()

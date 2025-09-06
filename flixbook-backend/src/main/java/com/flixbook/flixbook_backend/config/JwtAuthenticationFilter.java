@@ -1,5 +1,7 @@
 package com.flixbook.flixbook_backend.config;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
 import java.util.Collections;
 import java.util.List;
 import jakarta.servlet.FilterChain;
@@ -30,7 +32,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         final String authHeader = request.getHeader("Authorization");
         final String jwt;
-        final String userEmail;
+    // userEmail derivato direttamente dalle claims quando necessario
 
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             filterChain.doFilter(request, response);
@@ -38,34 +40,46 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         jwt = authHeader.substring(7);
-    userEmail = jwtUtil.getEmailFromToken(jwt);
+        try {
+            Claims claims = jwtUtil.parseClaims(jwt); // può lanciare ExpiredJwtException
+            if (SecurityContextHolder.getContext().getAuthentication() == null) {
+                String userEmailLocal = claims.getSubject();
+                if (userEmailLocal != null) {
+                    String role = (String) claims.get("role");
+                    Long userId = claims.get("userId", Number.class) == null ? null : claims.get("userId", Number.class).longValue();
+                    Long medicoId = claims.get("medicoId", Number.class) == null ? null : claims.get("medicoId", Number.class).longValue();
+                    @SuppressWarnings("unchecked") List<Object> managedRaw = (List<Object>) claims.get("managedMedici");
+                    List<Long> managed = managedRaw == null ? Collections.emptyList() : managedRaw.stream().map(o -> ((Number) o).longValue()).toList();
+                    Long acting = claims.get("actingMedicoId", Number.class) == null ? null : claims.get("actingMedicoId", Number.class).longValue();
 
-        if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-
-        String role = jwtUtil.getRoleFromToken(jwt);
-        Long userId = jwtUtil.getUserIdFromToken(jwt);
-        Long medicoId = jwtUtil.getMedicoIdFromToken(jwt);
-        List<Long> managed = jwtUtil.getManagedMediciFromToken(jwt);
-        Long acting = jwtUtil.getActingMedicoIdFromToken(jwt);
-        CustomUserDetails userDetails = new CustomUserDetails(
-            userEmail,
-            "", 
-            Collections.singletonList(new SimpleGrantedAuthority(role)),
-            userId,
-            medicoId,
-            managed,
-            acting
-        );
-
-            if (jwtUtil.validateToken(jwt)) {
-        UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-            userDetails,
-            null,
-            userDetails.getAuthorities()
-        );
-                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                SecurityContextHolder.getContext().setAuthentication(authToken);
+                    if (jwtUtil.validateToken(jwt)) { // doppio check: firma ok e non scaduto
+                        CustomUserDetails userDetails = new CustomUserDetails(
+                                userEmailLocal,
+                                "",
+                                Collections.singletonList(new SimpleGrantedAuthority(role)),
+                                userId,
+                                medicoId,
+                                managed,
+                                acting
+                        );
+                        UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+                                userDetails,
+                                null,
+                                userDetails.getAuthorities()
+                        );
+                        authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                        SecurityContextHolder.getContext().setAuthentication(authToken);
+                    }
+                }
             }
+        } catch (ExpiredJwtException ex) {
+            // Risposta JSON uniforme per token scaduto
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType("application/json");
+            response.getWriter().write("{\"error\":\"token_expired\",\"message\":\"Il token JWT è scaduto. Effettua di nuovo il login.\"}");
+            return; // interrompe la catena
+        } catch (Exception ignored) {
+            // Token invalido: prosegui senza autenticare (endpoint pubblico o verrà bloccato dopo)
         }
         filterChain.doFilter(request, response);
     }

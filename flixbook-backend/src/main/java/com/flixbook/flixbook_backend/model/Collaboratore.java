@@ -2,7 +2,6 @@ package com.flixbook.flixbook_backend.model;
 
 import jakarta.persistence.*;
 import lombok.*;
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -32,10 +31,10 @@ public class Collaboratore implements UserDetails {
 
     private String telefono;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "medico_id", nullable = false)
-    @JsonIgnore // Evita loop di serializzazione
-    private Medico medico;
+    // RIMOSSO: legacy relazione singolo medico (medico_id). Gestiamo ora SOLO la many-to-many su tabella collaboratori_medici.
+    // (Migrazione V19 rimuove definitivamente la colonna.)
+
+    // Se in futuro servirà navigazione JPA, si può riattivare una mapping ManyToMany qui.
 
     @Builder.Default
     private String ruolo = "ROLE_COLLABORATORE";

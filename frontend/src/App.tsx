@@ -20,6 +20,7 @@ import MedicoProfiloPage from "./pages/MedicoProfiloPage";
 import PazienteProfiloPage from "./pages/PazienteProfilePage";
 import RefertiPage from "./pages/RefertiPage";
 import AdminMediciPage from "./pages/AdminMediciPage";
+import AdminDashboardPage from "./pages/AdminDashboardPage";
 import AdminSediPage from "./pages/AdminSediPage";
 import AdminUtentiOpsPage from "./pages/AdminUtentiOpsPage";
 
@@ -77,6 +78,7 @@ function App() {
           />
           <Route path="/medico/profilo" element={<MedicoProfiloPage />} />
           {/* Admin */}
+          <Route path="/admin" element={<AdminDashboardPage />} />
           <Route path="/admin/medici" element={<AdminMediciPage />} />
           <Route path="/admin/sedi" element={<AdminSediPage />} />
           <Route path="/admin/ops" element={<AdminUtentiOpsPage />} />

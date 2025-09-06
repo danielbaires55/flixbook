@@ -189,8 +189,9 @@ public class AdminController {
     long totBlocchi = bloccoOrarioRepository.countByMedicoId(medicoId);
     int totAssocPrest = medicoPrestazioneRepository.findByMedicoId(medicoId).size();
     int totAssocSedi = medicoSedeRepository.findByIdMedicoId(medicoId).size();
-    int totCollab = (int) collaboratoreRepository.findAll().stream()
-        .filter(c -> c.getMedico() != null && medicoId.equals(c.getMedico().getId())).count();
+    // Calcola collaboratori associati SOLO dalla join table (legacy colonna rimossa)
+    Integer totCollab = jdbcTemplate.queryForObject(
+        "SELECT COUNT(*) FROM collaboratori_medici WHERE medico_id = ?", Integer.class, medicoId);
     var appIds = appuntamentoRepository.findIdsByMedicoId(medicoId);
     long totFeedback = 0L;
     if (appIds != null && !appIds.isEmpty()) {
@@ -209,9 +210,12 @@ public class AdminController {
     jdbcTemplate.update("DELETE FROM collaboratori_medici WHERE medico_id = ?", medicoId);
 
     // 2) Rimuovi collaboratori collegati a questo medico
-    collaboratoreRepository.findAll().stream()
-        .filter(c -> c.getMedico() != null && medicoId.equals(c.getMedico().getId()))
-        .forEach(c -> collaboratoreRepository.deleteById(c.getId()));
+    // Elimina collaboratori associati (via join) se necessario (business rule precedente conservata)
+    var collabIds = jdbcTemplate.query("SELECT collaboratore_id FROM collaboratori_medici WHERE medico_id = ?",
+        (rs, rn) -> rs.getLong(1), medicoId);
+    for (Long cid : collabIds) {
+        collaboratoreRepository.deleteById(cid);
+    }
 
     // 3) Cancella appuntamenti e relativi feedback
     if (appIds != null && !appIds.isEmpty()) {
@@ -397,12 +401,15 @@ public class AdminController {
     @GetMapping("/collaboratori")
     public List<Collaboratore> listCollaboratori(@RequestParam(required = false) Long medicoId) {
         if (medicoId == null) return collaboratoreRepository.findAll();
-        return collaboratoreRepository.findAll().stream()
-                .filter(c -> c.getMedico() != null && medicoId.equals(c.getMedico().getId()))
-                .toList();
+        // Ritorna i collaboratori associati tramite join table
+        var ids = jdbcTemplate.query("SELECT collaboratore_id FROM collaboratori_medici WHERE medico_id = ?",
+            (rs, rn) -> rs.getLong(1), medicoId);
+        if (ids.isEmpty()) return List.of();
+        return collaboratoreRepository.findAllById(ids);
     }
 
     @PostMapping("/collaboratori")
+    @Transactional
     public ResponseEntity<?> createCollaboratore(@RequestBody Map<String, String> body) {
         Long medicoId = parseLong(body.get("medicoId"));
         String nome = trim(body.get("nome"));
@@ -413,20 +420,21 @@ public class AdminController {
         if (medicoId == null || nome == null || cognome == null || email == null || password == null || password.length() < 6) {
             return ResponseEntity.badRequest().body(Map.of("error", "medicoId, nome, cognome, email e password (>=6) sono obbligatori"));
         }
-        Medico medico = medicoRepository.findById(medicoId).orElse(null);
-        if (medico == null) return ResponseEntity.badRequest().body(Map.of("error", "Medico non trovato"));
+    if (!medicoRepository.existsById(medicoId)) return ResponseEntity.badRequest().body(Map.of("error", "Medico non trovato"));
         if (collaboratoreRepository.findByEmail(email).isPresent()) {
             return ResponseEntity.status(409).body(Map.of("error", "Email collaboratore già in uso"));
         }
-        Collaboratore c = Collaboratore.builder()
-                .nome(nome)
-                .cognome(cognome)
-                .email(email)
-                .telefono(telefono)
-                .passwordHash(passwordEncoder.encode(password))
-                .medico(medico)
-                .build();
-        return ResponseEntity.ok(collaboratoreRepository.save(c));
+    Collaboratore c = Collaboratore.builder()
+        .nome(nome)
+        .cognome(cognome)
+        .email(email)
+        .telefono(telefono)
+        .passwordHash(passwordEncoder.encode(password))
+        .build();
+    c = collaboratoreRepository.save(c);
+    // Crea associazione nella join table
+    jdbcTemplate.update("INSERT INTO collaboratori_medici(collaboratore_id, medico_id) VALUES (?, ?)", c.getId(), medicoId);
+    return ResponseEntity.ok(c);
     }
 
     @PutMapping("/collaboratori/{id}")
@@ -458,26 +466,18 @@ public class AdminController {
     @GetMapping("/medici/{medicoId}/collaboratori")
     public ResponseEntity<?> listCollaboratoriAssegnati(@PathVariable Long medicoId) {
         if (!medicoRepository.existsById(medicoId)) return ResponseEntity.notFound().build();
-        // Legacy: collaboratori con medico_id = medicoId
-        var legacy = collaboratoreRepository.findAll().stream()
-                .filter(c -> c.getMedico() != null && medicoId.equals(c.getMedico().getId()))
-                .map(Collaboratore::getId)
-                .toList();
-        // Join table: collaboratori_medici
         var joinIds = jdbcTemplate.query("SELECT collaboratore_id FROM collaboratori_medici WHERE medico_id = ?",
-                (rs, rowNum) -> rs.getLong(1), medicoId);
-        java.util.Set<Long> allIds = new java.util.HashSet<>(legacy);
-        allIds.addAll(joinIds);
-        if (allIds.isEmpty()) return ResponseEntity.ok(List.of());
-        return ResponseEntity.ok(collaboratoreRepository.findAllById(allIds));
+            (rs, rowNum) -> rs.getLong(1), medicoId);
+        if (joinIds.isEmpty()) return ResponseEntity.ok(List.of());
+        return ResponseEntity.ok(collaboratoreRepository.findAllById(joinIds));
     }
 
     @PostMapping("/medici/{medicoId}/collaboratori/{collaboratoreId}")
     public ResponseEntity<?> assegnaCollaboratoreEsistente(@PathVariable Long medicoId, @PathVariable Long collaboratoreId) {
         var medico = medicoRepository.findById(medicoId).orElse(null);
         var collab = collaboratoreRepository.findById(collaboratoreId).orElse(null);
-        if (medico == null || collab == null) return ResponseEntity.notFound().build();
-        // Inserisci se non esiste già
+    if (medico == null || collab == null) return ResponseEntity.notFound().build();
+    // Inserisci se non esiste già nella join
         Integer count = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM collaboratori_medici WHERE collaboratore_id = ? AND medico_id = ?",
                 Integer.class, collaboratoreId, medicoId);
@@ -492,7 +492,7 @@ public class AdminController {
         if (!medicoRepository.existsById(medicoId) || !collaboratoreRepository.existsById(collaboratoreId)) {
             return ResponseEntity.notFound().build();
         }
-        jdbcTemplate.update("DELETE FROM collaboratori_medici WHERE collaboratore_id = ? AND medico_id = ?", collaboratoreId, medicoId);
+    jdbcTemplate.update("DELETE FROM collaboratori_medici WHERE collaboratore_id = ? AND medico_id = ?", collaboratoreId, medicoId);
         return ResponseEntity.noContent().build();
     }
 

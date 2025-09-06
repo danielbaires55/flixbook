@@ -296,7 +296,7 @@ public class AppuntamentoService implements InitializingBean {
             if (!app.isReminderInviato()) {
                 String oggetto = "Promemoria appuntamento: " + prestazione.getNome();
                 StringBuilder corpoBuilder = new StringBuilder(String.format(
-                    "Gentile %s,\n\nLe ricordiamo il suo appuntamento di domani:\n\n- Medico: Dr. %s %s\n- Prestazione: %s\n- Ora: %s\n",
+                    "Gentile %s,\n\nLe ricordiamo il suo appuntamento di domani:\n\n- Medico: Dott. %s %s\n- Prestazione: %s\n- Ora: %s\n",
                     paziente.getNome(), medico.getNome(), medico.getCognome(),
                     prestazione.getNome(), app.getDataEOraInizio().toLocalTime().toString()
                 ));
@@ -349,7 +349,7 @@ public class AppuntamentoService implements InitializingBean {
             String oggetto = "Lascia un feedback per il tuo appuntamento";
             String feedbackLink = frontendBaseUrl.replaceAll("/$", "") + "/feedback/" + appuntamento.getId();
             String corpo = String.format(
-                "Gentile %s,\n\nIl suo appuntamento con il Dr. %s è stato completato.\nCi aiuti a migliorare lasciando un feedback: %s\n\nGrazie!",
+                "Gentile %s,\n\nIl suo appuntamento con il Dott. %s è stato completato.\nCi aiuti a migliorare lasciando un feedback: %s\n\nGrazie!",
                 paziente.getNome(),
                 medico.getCognome(),
                 feedbackLink
@@ -369,7 +369,7 @@ public class AppuntamentoService implements InitializingBean {
     private void inviaNotificheConferma(Paziente paziente, Medico medico, Prestazione prestazione, Appuntamento appuntamento) {
         String oggetto = "Conferma appuntamento: " + prestazione.getNome();
         String corpo = String.format(
-            "Gentile %s,\n\nIl suo appuntamento è stato confermato:\n\n- Medico: Dr. %s %s\n- Prestazione: %s\n- Data: %s\n- Ora: %s\n\n",
+            "Gentile %s,\n\nIl suo appuntamento è stato confermato:\n\n- Medico: Dott. %s %s\n- Prestazione: %s\n- Data: %s\n- Ora: %s\n\n",
             paziente.getNome(), medico.getNome(), medico.getCognome(),
             prestazione.getNome(), appuntamento.getDataEOraInizio().toLocalDate().toString(), 
             appuntamento.getDataEOraInizio().toLocalTime().toString()

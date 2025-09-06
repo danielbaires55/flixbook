@@ -28,7 +28,6 @@ interface Appuntamento {
 }
 interface PazienteProfile { nome: string; cognome: string; email: string; }
 interface DocItem { id: number; originalName: string }
-interface RefertoItem { id: number; originalName: string; mimeType?: string; fileSize?: number; uploadedAt?: string; appuntamentoId: number; medicoNome?: string; medicoCognome?: string; prestazioneNome?: string; dataEOraInizio?: string; downloadUrl: string }
 // Slot shape used by /api/slots/prossimi-disponibili (subset)
 interface SlotLite { data: string; oraInizio: string | number; slotId?: number; sedeId?: number; sedeNome?: string }
 
@@ -59,9 +58,6 @@ const PazienteDashboard = () => {
   const [resSelectedSedeId, setResSelectedSedeId] = useState<number | ''>('');
   const [resSediOptions, setResSediOptions] = useState<Array<{ id?: number; nome?: string }>>([]);
   const [resSuccessOpen, setResSuccessOpen] = useState(false);
-  // Referti (documenti caricati dal medico) per il paziente
-  const [referti, setReferti] = useState<RefertoItem[]>([]);
-  const [refertiLoading, setRefertiLoading] = useState<boolean>(false);
 
   // Action feedback/confirmations
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
@@ -97,14 +93,6 @@ const PazienteDashboard = () => {
 
   setProfile(profileResponse.data);
   setAppuntamenti(appuntamentiResponse.data);
-      // carica referti
-      try {
-        setRefertiLoading(true);
-        const { data } = await axios.get<RefertoItem[]>(`${API_BASE_URL}/pazienti/referti`, { headers });
-        setReferti(data);
-      } catch {
-        setReferti([]);
-      } finally { setRefertiLoading(false); }
       } catch (err) {
         console.error("Errore nel recupero dei dati:", err);
         setError("Impossibile caricare i dati. Riprova più tardi.");
@@ -326,33 +314,6 @@ const PazienteDashboard = () => {
                   Prenota un Nuovo Appuntamento
                 </Link>
               </div>
-            </div>
-          </div>
-          {/* Referti card */}
-          <div className="card shadow-sm mt-4">
-            <div className="card-body">
-              <h4 className="card-title text-center mb-2">I tuoi referti</h4>
-              {refertiLoading ? (
-                <div>Caricamento…</div>
-              ) : referti.length === 0 ? (
-                <div className="text-muted text-center">Nessun referto disponibile.</div>
-              ) : (
-                <ul className="list-group list-group-flush">
-                  {referti.map(r => (
-                    <li key={r.id} className="list-group-item d-flex justify-content-between align-items-center">
-                      <div className="me-2">
-                        <div className="fw-semibold">{r.originalName}</div>
-                        <div className="small text-muted">
-                          {r.prestazioneNome ? `${r.prestazioneNome} · ` : ''}
-                          {r.medicoCognome || r.medicoNome ? `Dr. ${r.medicoNome || ''} ${r.medicoCognome || ''}` : ''}
-                          {r.dataEOraInizio ? ` · ${new Date(r.dataEOraInizio).toLocaleDateString('it-IT')}` : ''}
-                        </div>
-                      </div>
-                      <a className="btn btn-sm btn-outline-primary" href={`${SERVER_BASE_URL}${r.downloadUrl}`} target="_blank" rel="noopener noreferrer" title="Scarica referto">Scarica</a>
-                    </li>
-                  ))}
-                </ul>
-              )}
             </div>
           </div>
         </div>

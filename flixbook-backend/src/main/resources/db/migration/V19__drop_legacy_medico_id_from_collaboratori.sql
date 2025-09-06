@@ -1,0 +1,1 @@
+-- Sostituito da V20 (serve prima droppare FK e indice). Nessuna azione qui per evitare errori se lanciato prima di V20.

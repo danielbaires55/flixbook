@@ -27,12 +27,12 @@ public class Medico {
     
     private String biografia;
     private String ruolo = "ROLE_MEDICO";
-    @OneToMany(
-        mappedBy = "medico", 
-        cascade = CascadeType.ALL,
-        orphanRemoval = true
-    )
-    @JsonIgnore // Important to prevent serialization loops
+    // Nuova relazione many-to-many tramite tabella di join collaboratori_medici
+    @ManyToMany
+    @JoinTable(name = "collaboratori_medici",
+        joinColumns = @JoinColumn(name = "medico_id"),
+        inverseJoinColumns = @JoinColumn(name = "collaboratore_id"))
+    @JsonIgnore
     private List<Collaboratore> collaboratori;
 
     // Getters e Setters

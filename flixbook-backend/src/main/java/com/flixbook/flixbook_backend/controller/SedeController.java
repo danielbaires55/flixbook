@@ -1,11 +1,10 @@
 package com.flixbook.flixbook_backend.controller;
 
-import com.flixbook.flixbook_backend.model.Sede;
-import com.flixbook.flixbook_backend.repository.SedeRepository;
+import com.flixbook.flixbook_backend.dto.SedeDTO;
+import com.flixbook.flixbook_backend.service.SedeService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -14,10 +13,23 @@ import java.util.List;
 public class SedeController {
 
     @Autowired
-    private SedeRepository sedeRepository;
+    private SedeService sedeService;
 
     @GetMapping
-    public List<Sede> list() {
-        return sedeRepository.findAll();
+    public List<SedeDTO> list() {
+        return sedeService.listAll();
+    }
+
+    // DTO per aggiornare solo coordinate (es: dopo geocoding frontend o batch)
+    public record UpdateCoordinateRequest(Double lat, Double lng) {}
+
+    @PutMapping("/{id}/coordinate")
+    public ResponseEntity<SedeDTO> updateCoordinate(@PathVariable Long id,
+                                                     @RequestBody UpdateCoordinateRequest body) {
+        if (body.lat() == null || body.lng() == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        SedeDTO dto = sedeService.updateCoordinate(id, body.lat(), body.lng());
+        return ResponseEntity.ok(dto);
     }
 }
