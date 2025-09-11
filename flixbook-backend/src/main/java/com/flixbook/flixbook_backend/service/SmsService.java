@@ -41,7 +41,7 @@ public class SmsService {
     public void init() {
         // Initialize Twilio only when explicitly enabled and credentials are present
         if (!enabled) {
-            log.debug("[SmsService] Twilio disabled (twilio.enabled=false). Running in no-op mode.");
+            log.info("[SmsService] Twilio disabled (twilio.enabled=false). Running in no-op mode.");
             return;
         }
     // Defensive trim to avoid invisible whitespace issues from env/properties
@@ -56,7 +56,7 @@ public class SmsService {
         }
         try {
             Twilio.init(accountSid, authToken);
-            log.debug("[SmsService] Twilio initialized. From={} (masked)", mask(twilioPhoneNumber));
+            log.info("[SmsService] Twilio initialized. From={} (masked)", mask(twilioPhoneNumber));
         } catch (Exception e) {
             log.error("[SmsService] Failed to initialize Twilio: {}", e.getMessage());
             enabled = false;
@@ -65,7 +65,7 @@ public class SmsService {
 
     public void sendSms(String to, String body) {
         if (!enabled) {
-            log.debug("[SmsService] sendSms skipped (disabled): to={}", mask(to));
+            log.info("[SmsService] sendSms skipped (disabled): to={}", mask(to));
             return;
         }
         String e164 = normalizeToE164(to);
@@ -86,7 +86,7 @@ public class SmsService {
 
     public void sendConfirmationSms(String to, String appuntamentoDettagli) {
         if (!enabled) {
-            log.debug("[SmsService] sendConfirmationSms skipped (disabled): to={}", mask(to));
+            log.info("[SmsService] sendConfirmationSms skipped (disabled): to={}", mask(to));
             return;
         }
         String e164 = normalizeToE164(to);
@@ -112,7 +112,7 @@ public class SmsService {
      */
     public void sendPatientAppointmentMessage(String to, String statoLabel, String dettagli) {
         if (!enabled) {
-            log.debug("[SmsService] sendPatientAppointmentMessage skipped (disabled): to={}, stato={}, details={}", mask(to), statoLabel, truncate(dettagli));
+            log.info("[SmsService] sendPatientAppointmentMessage skipped (disabled): to={}, stato={}, details={}", mask(to), statoLabel, truncate(dettagli));
             return;
         }
         String e164 = normalizeToE164(to);

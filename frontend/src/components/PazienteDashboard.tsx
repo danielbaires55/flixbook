@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import axios, { AxiosError } from "axios";
 import { Link } from "react-router-dom";
 import { Modal, Button } from "react-bootstrap";
 import "bootstrap/dist/css/bootstrap.min.css";
@@ -124,7 +124,9 @@ const PazienteDashboard = () => {
       setCancelSuccessOpen(true);
     } catch (err) {
       console.error("Errore nell'annullamento dell'appuntamento", err);
-      setActionError("Si è verificato un errore durante l'annullamento. Riprova.");
+      const axErr = err as AxiosError;
+      const serverMsg: string | undefined = (axErr.response?.data && typeof axErr.response.data === 'string') ? axErr.response.data as string : undefined;
+      setActionError(serverMsg || "Si è verificato un errore durante l'annullamento. Riprova.");
       setActionErrorOpen(true);
     }
   };

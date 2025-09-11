@@ -70,6 +70,10 @@ public class AppuntamentoController {
         try {
             appuntamentoService.annullaAppuntamento(appuntamentoId, pazienteEmail);
             return ResponseEntity.ok("Appuntamento annullato con successo.");
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         }

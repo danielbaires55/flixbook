@@ -175,12 +175,19 @@ public class AppuntamentoService implements InitializingBean {
         Appuntamento appuntamento = appuntamentoRepository.findById(appuntamentoId)
                 .orElseThrow(() -> new IllegalArgumentException("Appuntamento non trovato."));
 
-        if (!appuntamento.getPaziente().getEmail().equals(pazienteEmail)) {
+        // Confronto case-insensitive per evitare mismatch su maiuscole/minuscole
+        if (appuntamento.getPaziente().getEmail() == null || pazienteEmail == null ||
+            !appuntamento.getPaziente().getEmail().equalsIgnoreCase(pazienteEmail)) {
             throw new SecurityException("Non sei autorizzato ad annullare questo appuntamento.");
         }
 
-        emailService.sendEmail(pazienteEmail, "Conferma annullamento appuntamento",
-            "Gentile " + appuntamento.getPaziente().getNome() + ",\n\nLe confermiamo che il suo appuntamento è stato annullato con successo.\n\nCordiali saluti,\nIl team di Flixbook");
+        // Non rendere fallibile l'API per problemi SMTP
+        try {
+            emailService.sendEmail(pazienteEmail, "Conferma annullamento appuntamento",
+                "Gentile " + appuntamento.getPaziente().getNome() + ",\n\nLe confermiamo che il suo appuntamento è stato annullato con successo.\n\nCordiali saluti,\nIl team di Flixbook");
+        } catch (Exception ex) {
+            if (log.isWarnEnabled()) log.warn("Invio email annullamento al paziente fallito per appuntamento {}: {}", appuntamentoId, ex.getMessage());
+        }
 
         Medico medico = appuntamento.getMedico();
         Prestazione prestazione = appuntamento.getPrestazione();
@@ -192,7 +199,11 @@ public class AppuntamentoService implements InitializingBean {
                 medico.getCognome(), appuntamento.getPaziente().getNome(), appuntamento.getPaziente().getCognome(),
                 prestazione.getNome(), appuntamento.getDataEOraInizio().toLocalDate().toString(), appuntamento.getDataEOraInizio().toLocalTime().toString()
             );
-            emailService.sendEmail(destinatarioMedico, oggettoMedico, corpoMedico);
+            try {
+                emailService.sendEmail(destinatarioMedico, oggettoMedico, corpoMedico);
+            } catch (Exception ex) {
+                if (log.isWarnEnabled()) log.warn("Invio email annullamento al medico fallito per appuntamento {}: {}", appuntamentoId, ex.getMessage());
+            }
         }
 
         appuntamento.setStato(StatoAppuntamento.ANNULLATO);
@@ -234,7 +245,11 @@ public class AppuntamentoService implements InitializingBean {
             prestazione.getNome(), appuntamento.getDataEOraInizio().toLocalDate().toString(), 
             appuntamento.getDataEOraInizio().toLocalTime().toString()
         );
-        emailService.sendEmail(paziente.getEmail(), oggettoPaziente, corpoEmailPaziente);
+        try {
+            emailService.sendEmail(paziente.getEmail(), oggettoPaziente, corpoEmailPaziente);
+        } catch (Exception ex) {
+            if (log.isWarnEnabled()) log.warn("Invio email annullamento al paziente fallito (medico) per appuntamento {}: {}", appuntamentoId, ex.getMessage());
+        }
 
         String numeroTelefonoPaziente = paziente.getTelefono();
         if (numeroTelefonoPaziente != null && !numeroTelefonoPaziente.trim().isEmpty()) {
