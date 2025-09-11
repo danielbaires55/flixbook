@@ -36,6 +36,10 @@ Dettagli
 	- `VITE_SERVER_BASE_URL=http://localhost:8080`
 - Credenziali rapide (demo): `admin@flixbook.local / admin123`
 
+Sicurezza credenziali (Twilio/Gmail)
+- Non committare mai le credenziali. Il backend legge: `MAIL_USERNAME`, `MAIL_PASSWORD`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` da variabili d'ambiente (vedi `.env.example`).
+- Copia `.env.example` in `.env` e valorizza le variabili in locale; `.env` è già in `.gitignore`.
+
 ### Opzione B: senza Docker (MySQL locale)
 
 1) Crea un DB vuoto (es. `flixbookdb`) sul tuo MySQL locale.
