@@ -25,11 +25,12 @@ const CreateBloccoOrarioForm: FC = () => {
     pausaFine: '14:00',
   });
   
-  const [message, setMessage] = useState<string | null>(null);
+  // rimosso alert inline di success; usiamo modal dedicato
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [warnModal, setWarnModal] = useState<{ show: boolean; title: string; message: string }>({ show: false, title: '', message: '' });
+  const [successModal, setSuccessModal] = useState<{ show: boolean; title: string; message: string }>({ show: false, title: '', message: '' });
 
   // Sedi
   type Sede = { id: number; nome: string };
@@ -148,9 +149,8 @@ const CreateBloccoOrarioForm: FC = () => {
       setError('Devi essere autenticato per creare un blocco orario.');
       return;
     }
-    setIsSubmitting(true);
-    setError(null);
-    setMessage(null);
+  setIsSubmitting(true);
+  setError(null);
 
     const { oraInizio, oraFine, includePausa, pausaInizio, pausaFine } = formData;
 
@@ -197,10 +197,41 @@ const CreateBloccoOrarioForm: FC = () => {
             await axios.post(`${API_BASE_URL}/blocchi-orario/create`, mattina, { headers });
             await axios.post(`${API_BASE_URL}/blocchi-orario/create`, pomeriggio, { headers });
           } catch (e: unknown) {
-            const err = e as { response?: { data?: unknown; status?: number } };
-            const backendMsg = typeof err?.response?.data === 'string' ? err.response.data as string : undefined;
-            const msg = backendMsg || 'Esiste già un blocco che copre parte di questo intervallo. Modifica gli orari o scegli un altro giorno.';
-            setWarnModal({ show: true, title: 'Attenzione', message: msg });
+            type ConflictSlot = { start: string; end: string; stato?: string };
+            type ConflictBlock = { start: string; end: string };
+            type ConflictPayloadObj = { error?: string; details?: { slots?: ConflictSlot[]; blocks?: ConflictBlock[] } };
+            type ConflictPayload = ConflictPayloadObj | string | undefined;
+            const isObj = (v: unknown): v is ConflictPayloadObj => typeof v === 'object' && v !== null;
+            const err = e as { response?: { data?: ConflictPayload; status?: number } };
+            let message = 'Esiste già un blocco che copre parte di questo intervallo. Modifica gli orari o scegli un altro giorno.';
+            if (err?.response?.data) {
+              const data = err.response.data;
+              const baseMsg = isObj(data) && typeof data.error === 'string' ? data.error : (typeof data === 'string' ? data : 'Conflitto con blocchi esistenti.');
+              const details = isObj(data) ? data.details : undefined;
+              const slots: ConflictSlot[] | undefined = details?.slots;
+              const blocks: ConflictBlock[] | undefined = details?.blocks;
+              const rows: string[] = [];
+              if (Array.isArray(blocks) && blocks.length) {
+                rows.push('Blocchi in conflitto:');
+                rows.push(...blocks.map(b => {
+                  const from = new Date(b.start).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+                  const to = new Date(b.end).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+                  return `• ${from}–${to}`;
+                }));
+              }
+              if (Array.isArray(slots) && slots.length) {
+                if (!rows.length) rows.push('');
+                rows.push(`Slot già presenti per ${giorno}:`);
+                rows.push(...slots.map(s => {
+                  const from = new Date(s.start).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+                  const to = new Date(s.end).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+                  const stato = s.stato ? ` (${s.stato.toLowerCase()})` : '';
+                  return `• ${from}–${to}${stato}`;
+                }));
+              }
+              message = rows.length ? `${baseMsg}\n\n${rows.join('\n')}` : baseMsg;
+            }
+            setWarnModal({ show: true, title: 'Attenzione', message });
             setIsSubmitting(false);
             return;
           }
@@ -215,10 +246,41 @@ const CreateBloccoOrarioForm: FC = () => {
           try {
             await axios.post(`${API_BASE_URL}/blocchi-orario/create`, unico, { headers });
           } catch (e: unknown) {
-            const err = e as { response?: { data?: unknown; status?: number } };
-            const backendMsg = typeof err?.response?.data === 'string' ? err.response.data as string : undefined;
-            const msg = backendMsg || 'Esiste già un blocco che copre parte di questo intervallo. Modifica gli orari o scegli un altro giorno.';
-            setWarnModal({ show: true, title: 'Attenzione', message: msg });
+            type ConflictSlot = { start: string; end: string; stato?: string };
+            type ConflictBlock = { start: string; end: string };
+            type ConflictPayloadObj = { error?: string; details?: { slots?: ConflictSlot[]; blocks?: ConflictBlock[] } };
+            type ConflictPayload = ConflictPayloadObj | string | undefined;
+            const isObj = (v: unknown): v is ConflictPayloadObj => typeof v === 'object' && v !== null;
+            const err = e as { response?: { data?: ConflictPayload; status?: number } };
+            let message = 'Esiste già un blocco che copre parte di questo intervallo. Modifica gli orari o scegli un altro giorno.';
+            if (err?.response?.data) {
+              const data = err.response.data;
+              const baseMsg = isObj(data) && typeof data.error === 'string' ? data.error : (typeof data === 'string' ? data : 'Conflitto con blocchi esistenti.');
+              const details = isObj(data) ? data.details : undefined;
+              const slots: ConflictSlot[] | undefined = details?.slots;
+              const blocks: ConflictBlock[] | undefined = details?.blocks;
+              const rows: string[] = [];
+              if (Array.isArray(blocks) && blocks.length) {
+                rows.push('Blocchi in conflitto:');
+                rows.push(...blocks.map(b => {
+                  const from = new Date(b.start).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+                  const to = new Date(b.end).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+                  return `• ${from}–${to}`;
+                }));
+              }
+              if (Array.isArray(slots) && slots.length) {
+                if (!rows.length) rows.push('');
+                rows.push(`Slot già presenti per ${giorno}:`);
+                rows.push(...slots.map(s => {
+                  const from = new Date(s.start).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+                  const to = new Date(s.end).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+                  const stato = s.stato ? ` (${s.stato.toLowerCase()})` : '';
+                  return `• ${from}–${to}${stato}`;
+                }));
+              }
+              message = rows.length ? `${baseMsg}\n\n${rows.join('\n')}` : baseMsg;
+            }
+            setWarnModal({ show: true, title: 'Attenzione', message });
             setIsSubmitting(false);
             return;
           }
@@ -227,11 +289,11 @@ const CreateBloccoOrarioForm: FC = () => {
 
       if (multiSelect) {
         setSelectedYMDs([]);
-        setMessage(`Creati blocchi per ${datesToCreate.length} giorno${datesToCreate.length>1?'i':''}.`);
       } else {
         setFormData({ ...formData, data: '' });
-        setMessage('Blocco orario creato con successo.');
       }
+      // Mostra dialog di successo
+      setSuccessModal({ show: true, title: 'Successo', message: 'Blocco orario creato con successo.' });
 
     } catch (err) {
       console.error('Errore nella creazione del blocco orario:', err);
@@ -277,7 +339,7 @@ const CreateBloccoOrarioForm: FC = () => {
               </p>
               <form onSubmit={handleSubmit}>
                 {error && <div className="alert alert-danger">{error}</div>}
-                {message && <div className="alert alert-success">{message}</div>}
+                {/* Success handled via modal dialog instead of inline alert */}
 
                 <div className="mb-3">
                   <Form.Label className="fw-bold">Sede</Form.Label>
@@ -546,6 +608,13 @@ const CreateBloccoOrarioForm: FC = () => {
       message={warnModal.message}
       variant="warning"
       onClose={() => setWarnModal({ show: false, title: '', message: '' })}
+    />
+    <InfoModal
+      show={successModal.show}
+      title={successModal.title || 'Successo'}
+      message={successModal.message}
+      variant="success"
+      onClose={() => setSuccessModal({ show: false, title: '', message: '' })}
     />
     </>
   );

@@ -31,6 +31,10 @@ public class Collaboratore implements UserDetails {
 
     private String telefono;
 
+    @Column(name = "attivo", nullable = false)
+    @Builder.Default
+    private boolean attivo = true; // Permette all'admin di disattivare l'account
+
     // RIMOSSO: legacy relazione singolo medico (medico_id). Gestiamo ora SOLO la many-to-many su tabella collaboratori_medici.
     // (Migrazione V19 rimuove definitivamente la colonna.)
 
@@ -73,6 +77,6 @@ public class Collaboratore implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        return true;
+    return attivo;
     }
 }

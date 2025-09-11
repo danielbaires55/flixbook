@@ -1,5 +1,6 @@
 package com.flixbook.flixbook_backend.config;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.jdbc.core.JdbcTemplate;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import java.util.Collections;
@@ -20,9 +21,10 @@ import java.io.IOException;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
-
-    public JwtAuthenticationFilter(JwtUtil jwtUtil) {
+    private final JdbcTemplate jdbcTemplate; // per verificare flag attivo collaboratori (senza caricare intero entity)
+    public JwtAuthenticationFilter(JwtUtil jwtUtil, JdbcTemplate jdbcTemplate) {
         this.jwtUtil = jwtUtil;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @Override
@@ -53,6 +55,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     Long acting = claims.get("actingMedicoId", Number.class) == null ? null : claims.get("actingMedicoId", Number.class).longValue();
 
                     if (jwtUtil.validateToken(jwt)) { // doppio check: firma ok e non scaduto
+                        // Se collaboratore, verifica che sia ancora attivo; se non attivo -> non autenticare
+                        if ("ROLE_COLLABORATORE".equals(role)) {
+                            Boolean attivo = jdbcTemplate.queryForObject(
+                                "SELECT attivo FROM collaboratori WHERE id = ?",
+                                Boolean.class,
+                                userId
+                            );
+                            if (attivo == null || !attivo) {
+                                // Account disattivato: non impostare autenticazione
+                                filterChain.doFilter(request, response);
+                                return;
+                            }
+                        }
                         CustomUserDetails userDetails = new CustomUserDetails(
                                 userEmailLocal,
                                 "",

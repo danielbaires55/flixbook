@@ -23,7 +23,7 @@ interface Prestazione {
   id: number;
   nome: string;
   tipoPrestazione: "fisico" | "virtuale";
-  costo: number;
+  costo: number | null;
 }
 
 interface Medico {
@@ -212,9 +212,18 @@ const BookingCalendar: React.FC = () => {
       setSelectedMedicoId("");
 
       axios
-        .get<Prestazione[]>(`${API_BASE_URL}/prestazioni/bySpecialita/${selectedSpecialitaId}`)
+        .get(`${API_BASE_URL}/prestazioni/bySpecialita/${selectedSpecialitaId}`)
         .then((response) => {
-          setPrestazioniList(response.data);
+          const raw = response.data as unknown;
+          const list: Prestazione[] = Array.isArray(raw) ? raw.map((r: unknown) => {
+            const rec = r as Record<string, unknown>;
+            const id = Number(rec.id);
+            const nome = String(rec.nome ?? '');
+            const tipo: 'fisico' | 'virtuale' = rec.tipoPrestazione === 'virtuale' ? 'virtuale' : 'fisico';
+            const costoVal = rec.costo == null ? null : Number(rec.costo);
+            return { id, nome, tipoPrestazione: tipo, costo: (costoVal !== null && Number.isFinite(costoVal)) ? costoVal : null };
+          }) : [];
+          setPrestazioniList(list);
         })
         .catch((error) => console.error("Errore nel recupero delle prestazioni", error));
     }
@@ -587,7 +596,7 @@ const BookingCalendar: React.FC = () => {
                     <option value="">Seleziona prestazione…</option>
                     {prestazioniList.map((p) => (
                       <option key={p.id} value={p.id}>
-                        {p.nome} - {p.costo}€
+                        {p.nome} - {p.costo != null ? p.costo + '€' : '—'}
                       </option>
                     ))}
                   </select>

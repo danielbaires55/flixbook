@@ -18,8 +18,8 @@ public class Prestazione {
 
     private String nome;
     private String descrizione;
+    // Costo generale non più usato: i costi per sede sono in prestazioni_sedi; lasciato nullable per retrocompatibilità
     private Double costo;
-    private String icon_url;
     @Column(name = "durata_minuti", nullable = false)
     private int durataMinuti;
 

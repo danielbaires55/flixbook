@@ -7,7 +7,7 @@ import { API_BASE_URL } from '../config/api';
 
 type Medico = { id: number; nome: string; cognome: string };
 type Sede = { id: number; nome: string };
-type Collaboratore = { id: number; nome: string; cognome: string; email: string; telefono?: string; medico?: Medico };
+type Collaboratore = { id: number; nome: string; cognome: string; email: string; telefono?: string; medico?: Medico; attivo?: boolean };
 
 export default function AdminUtentiOpsPage() {
   const { user } = useAuth();
@@ -24,6 +24,7 @@ export default function AdminUtentiOpsPage() {
   // Modals state
   const [confirmUnassignId, setConfirmUnassignId] = useState<number | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [confirmDeactivateId, setConfirmDeactivateId] = useState<number | null>(null);
   const [infoModal, setInfoModal] = useState<{show:boolean; title:string; message:string}>({show:false,title:'',message:''});
   const [errorModal, setErrorModal] = useState<{show:boolean; message:string}>({show:false,message:''});
 
@@ -227,24 +228,45 @@ export default function AdminUtentiOpsPage() {
               </div>
             </form>
             <ul className="list-group">
-              {collabs.map(c => (
-                <li key={c.id} className="list-group-item d-flex justify-content-between align-items-center">
-                  <div>
-                    {c.cognome} {c.nome} · {c.email}
-                    {/* Rimosso badge legacy per consentire gestione uniforme */}
-                  </div>
-                  <div className="d-flex gap-2">
-                    <button
-                      className="btn btn-sm btn-outline-secondary"
-                      onClick={() => setConfirmUnassignId(c.id)}
-                      disabled={removingCollabId === c.id}
-                    >
-                      {removingCollabId === c.id ? 'Rimuovendo…' : 'Rimuovi dal medico'}
-                    </button>
-                    <button className="btn btn-sm btn-outline-danger" onClick={() => setConfirmDeleteId(c.id)}>Elimina</button>
-                  </div>
-                </li>
-              ))}
+              {collabs.map(c => {
+                const active = c.attivo !== false; // default true
+                return (
+                  <li key={c.id} className="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                      {c.cognome} {c.nome} · {c.email}{' '}
+                      {active ? (
+                        <span className="badge text-bg-success">attivo</span>
+                      ) : (
+                        <span className="badge text-bg-secondary">disattivato</span>
+                      )}
+                    </div>
+                    <div className="d-flex gap-2">
+                      <button
+                        className="btn btn-sm btn-outline-warning"
+                        onClick={async () => {
+                          if (active) {
+                            // richiede conferma per disattivare
+                            setConfirmDeactivateId(c.id);
+                          } else {
+                            // riattiva subito senza conferma
+                            const resp = await axios.post<Collaboratore>(`${API_BASE_URL}/admin/collaboratori/${c.id}/toggle-attivo`, null, { headers });
+                            setCollabs(prev => prev.map(x => x.id === c.id ? resp.data : x));
+                            setAllCollabs(prev => prev.map(x => x.id === c.id ? resp.data : x));
+                          }
+                        }}
+                      >{active ? 'Disattiva' : 'Attiva'}</button>
+                      <button
+                        className="btn btn-sm btn-outline-secondary"
+                        onClick={() => setConfirmUnassignId(c.id)}
+                        disabled={removingCollabId === c.id}
+                      >
+                        {removingCollabId === c.id ? 'Rimuovendo…' : 'Rimuovi dal medico'}
+                      </button>
+                      <button className="btn btn-sm btn-outline-danger" onClick={() => setConfirmDeleteId(c.id)}>Elimina</button>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         </div>
@@ -273,6 +295,25 @@ export default function AdminUtentiOpsPage() {
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setConfirmDeleteId(null)}>Annulla</Button>
           <Button variant="danger" onClick={() => { const id = confirmDeleteId!; setConfirmDeleteId(null); delCollab(id); }}>Elimina</Button>
+        </Modal.Footer>
+      </Modal>
+      {/* Confirm Deactivate Modal */}
+      <Modal show={confirmDeactivateId !== null} onHide={() => setConfirmDeactivateId(null)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Disattivare collaboratore?</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          Il collaboratore non potrà più accedere finché non verrà riattivato. Confermi la disattivazione?
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setConfirmDeactivateId(null)}>Annulla</Button>
+          <Button variant="warning" onClick={async () => {
+            const id = confirmDeactivateId!;
+            setConfirmDeactivateId(null);
+            const resp = await axios.post<Collaboratore>(`${API_BASE_URL}/admin/collaboratori/${id}/toggle-attivo`, null, { headers });
+            setCollabs(prev => prev.map(x => x.id === id ? resp.data : x));
+            setAllCollabs(prev => prev.map(x => x.id === id ? resp.data : x));
+          }}>Disattiva</Button>
         </Modal.Footer>
       </Modal>
       {/* Info Modal */}

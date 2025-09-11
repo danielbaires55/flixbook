@@ -73,11 +73,33 @@ public class BloccoOrarioController {
             prestazioneIds
         );
             return new ResponseEntity<>(bloccoCreato, HttpStatus.CREATED);
+        } catch (com.flixbook.flixbook_backend.service.ConflictException ce) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(
+                java.util.Map.of(
+                    "error", ce.getMessage(),
+                    "details", ce.getPayload()
+                )
+            );
         } catch (IllegalStateException ise) {
-            // Conflitto logico (es. sovrapposizione blocchi)
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(ise.getMessage());
+            // Conflitto generico
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(java.util.Map.of("error", ise.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
+    @GetMapping("/by-day")
+    public ResponseEntity<?> getBlocchiByDay(@RequestParam("data") String dataStr, Authentication authentication) {
+        try {
+            CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
+            Long medicoId = userDetails.getMedicoId();
+            LocalDate data = LocalDate.parse(dataStr);
+            var blocchi = bloccoOrarioService.findBlocchiFuturiByMedicoId(medicoId).stream()
+                .filter(b -> b.getData().equals(data))
+                .toList();
+            return ResponseEntity.ok(blocchi);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
 

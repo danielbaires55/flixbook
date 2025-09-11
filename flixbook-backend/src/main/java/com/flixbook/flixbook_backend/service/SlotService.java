@@ -57,7 +57,7 @@ public class SlotService {
     public List<LocalTime> findAvailableSlots(Long medicoId, Long prestazioneId, Long sedeId, LocalDate data) {
         Prestazione prestazione = prestazioneRepository.findById(prestazioneId)
                 .orElseThrow(() -> new IllegalArgumentException("Prestazione non trovata."));
-        int durata = prestazione.getDurataMinuti();
+    final int SLOT_GRANULARITY_MINUTES = 30; // slot sempre di 30 minuti indipendentemente dalla durata prestazione
 
         // 1) Se esistono Slot persistiti per quel medico e giorno, usali come fonte di verità
         List<Slot> slotsDelGiorno = slotRepository.findByMedicoIdAndData(medicoId, data);
@@ -121,13 +121,13 @@ public class SlotService {
             }
             LocalTime potenzialeSlot = blocco.getOraInizio();
             LocalTime fineBlocco = blocco.getOraFine();
-            while (!potenzialeSlot.plusMinutes(durata).isAfter(fineBlocco)) {
+            while (!potenzialeSlot.plusMinutes(SLOT_GRANULARITY_MINUTES).isAfter(fineBlocco)) {
                 // Escludi slot nel passato (per il giorno corrente)
                 if (data.equals(LocalDate.now()) && potenzialeSlot.isBefore(LocalTime.now())) {
-                    potenzialeSlot = potenzialeSlot.plusMinutes(durata);
+                    potenzialeSlot = potenzialeSlot.plusMinutes(SLOT_GRANULARITY_MINUTES);
                     continue;
                 }
-                LocalTime finePotenzialeSlot = potenzialeSlot.plusMinutes(durata);
+                LocalTime finePotenzialeSlot = potenzialeSlot.plusMinutes(SLOT_GRANULARITY_MINUTES);
                 boolean isOccupato = false;
                 for (Appuntamento app : appuntamentiEsistenti) {
                     if (app.getStato() != StatoAppuntamento.CONFERMATO) continue;
@@ -139,7 +139,7 @@ public class SlotService {
                     }
                 }
                 if (!isOccupato) slotDisponibili.add(potenzialeSlot);
-                potenzialeSlot = potenzialeSlot.plusMinutes(durata);
+                potenzialeSlot = potenzialeSlot.plusMinutes(SLOT_GRANULARITY_MINUTES);
             }
         }
         slotDisponibili.sort(LocalTime::compareTo);
@@ -152,8 +152,8 @@ public class SlotService {
                                                                  Integer fromHour, Integer toHour) {
         var prest = prestazioneRepository.findById(prestazioneId)
             .orElseThrow(() -> new IllegalArgumentException("Prestazione non trovata."));
-        boolean isVirtual = prest.getTipoPrestazione() == com.flixbook.flixbook_backend.model.TipoPrestazione.virtuale;
-        int durata = prest.getDurataMinuti();
+    boolean isVirtual = prest.getTipoPrestazione() == com.flixbook.flixbook_backend.model.TipoPrestazione.virtuale;
+    final int SLOT_GRANULARITY_MINUTES = 30; // fissi
         List<Map<String, Object>> tuttiSlot = new ArrayList<>();
         LocalDate oggi = LocalDate.now();
         final int NUMERO_SLOT_DA_RESTITUIRE = (limit != null && limit > 0) ? limit : 15;
@@ -216,7 +216,7 @@ public class SlotService {
                                             s.setMedico(medico);
                                             s.setBloccoOrario(b);
                                             s.setDataEOraInizio(start);
-                                            s.setDataEOraFine(start.plusMinutes(durata));
+                                            s.setDataEOraFine(start.plusMinutes(SLOT_GRANULARITY_MINUTES));
                                             s.setStato(SlotStato.DISPONIBILE);
                                             return slotRepository.save(s);
                                         } catch (Exception e) { return null; }
@@ -253,8 +253,8 @@ public class SlotService {
     public List<Map<String, Object>> findSlotsForDay(Long prestazioneId, Long medicoId, Long sedeId, LocalDate data) {
         var prest = prestazioneRepository.findById(prestazioneId)
             .orElseThrow(() -> new IllegalArgumentException("Prestazione non trovata."));
-        boolean isVirtual = prest.getTipoPrestazione() == com.flixbook.flixbook_backend.model.TipoPrestazione.virtuale;
-        int durata = prest.getDurataMinuti();
+    boolean isVirtual = prest.getTipoPrestazione() == com.flixbook.flixbook_backend.model.TipoPrestazione.virtuale;
+    final int SLOT_GRANULARITY_MINUTES = 30; // fissi
         List<Map<String, Object>> slotTrovati = new ArrayList<>();
         
         List<Medico> mediciDaControllare;
@@ -294,7 +294,7 @@ public class SlotService {
                                         s.setMedico(medico);
                                         s.setBloccoOrario(b);
                                         s.setDataEOraInizio(start);
-                                        s.setDataEOraFine(start.plusMinutes(durata));
+                                        s.setDataEOraFine(start.plusMinutes(SLOT_GRANULARITY_MINUTES));
                                         s.setStato(SlotStato.DISPONIBILE);
                                         return slotRepository.save(s);
                                     } catch (Exception e) { return null; }

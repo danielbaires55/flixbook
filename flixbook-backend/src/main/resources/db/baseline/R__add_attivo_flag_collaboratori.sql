@@ -1,0 +1,2 @@
+-- NO-OP: la colonna 'attivo' ora viene gestita dalla migration versionata V2__add_attivo_collaboratori.sql
+-- Questo file resta solo per evitare errori di checksum/lookup. Nessuna istruzione eseguita.

@@ -15,6 +15,7 @@ export default function AdminDashboardPage() {
     { title: 'Medici', path: '/admin/medici', desc: 'Crea e gestisci i medici, specialità e sedi associate', color: 'primary' },
     { title: 'Sedi', path: '/admin/sedi', desc: 'Gestisci le sedi e le loro coordinate (geocoding)', color: 'success' },
     { title: 'Ops / Associazioni', path: '/admin/ops', desc: 'Associa sedi e collaboratori ai medici', color: 'warning' },
+    { title: 'Prestazioni', path: '/admin/prestazioni', desc: 'Gestisci l\'elenco delle prestazioni per ogni specialità: crea, modifica, elimina e aggiorna costi/durata.', color: 'info' },
   ];
 
   return (

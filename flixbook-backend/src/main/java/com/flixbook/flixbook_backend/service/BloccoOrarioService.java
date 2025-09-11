@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.HashSet;
+import java.util.Map;
 
 @Service
 @Transactional
@@ -65,18 +66,50 @@ public class BloccoOrarioService {
         Medico medico = medicoRepository.findById(medicoId)
                 .orElseThrow(() -> new IllegalArgumentException("Medico non trovato con ID: " + medicoId));
 
-        // Evita la creazione di blocchi sovrapposti nello stesso giorno per lo stesso medico
+        // Evita la creazione di blocchi sovrapposti basandoti sugli slot effettivi del giorno
         List<BloccoOrario> esistenti = bloccoOrarioRepository.findByMedicoIdAndData(medicoId, data);
         LocalTime newStart = LocalTime.parse(oraInizio);
         LocalTime newEnd = LocalTime.parse(oraFine);
-        boolean overlaps = esistenti.stream().anyMatch(b -> {
-            LocalTime existingStart = b.getOraInizio();
-            LocalTime existingEnd = b.getOraFine();
-            // intervalli [start, end) si sovrappongono se start < otherEnd && end > otherStart
-            return newStart.isBefore(existingEnd) && newEnd.isAfter(existingStart);
-        });
-        if (overlaps) {
-            throw new IllegalStateException("Esiste già un blocco orario che si sovrappone a questo intervallo.");
+        var startDT = LocalDateTime.of(data, newStart);
+        var endDT = LocalDateTime.of(data, newEnd);
+        List<Slot> slotsDelGiorno = slotRepository.findByMedicoIdAndData(medicoId, data);
+        List<Slot> conflicting = slotsDelGiorno.stream()
+            .filter(s -> !s.getDataEOraInizio().isBefore(startDT) && s.getDataEOraInizio().isBefore(endDT))
+            .toList();
+        if (!conflicting.isEmpty()) {
+            java.util.List<java.util.Map<String,Object>> slots = conflicting.stream()
+                .map(s -> {
+                    java.util.Map<String,Object> m = new java.util.LinkedHashMap<>();
+                    m.put("id", s.getId());
+                    m.put("start", s.getDataEOraInizio().toString());
+                    m.put("end", s.getDataEOraFine().toString());
+                    m.put("stato", s.getStato().name());
+                    return m;
+                })
+                .toList();
+            // Per completezza, includi eventuali blocchi che coprono l'intervallo e hanno ancora slot
+            java.util.List<java.util.Map<String,Object>> blocks = esistenti.stream()
+                .filter(b -> newStart.isBefore(b.getOraFine()) && newEnd.isAfter(b.getOraInizio()))
+                .filter(b -> !slotRepository.findByBloccoOrarioIdOrderByDataEOraInizio(b.getId()).isEmpty())
+                .map(b -> {
+                    java.util.Map<String,Object> m = new java.util.LinkedHashMap<>();
+                    m.put("id", b.getId());
+                    m.put("start", java.time.LocalDateTime.of(b.getData(), b.getOraInizio()).toString());
+                    m.put("end", java.time.LocalDateTime.of(b.getData(), b.getOraFine()).toString());
+                    return m;
+                })
+                .toList();
+            throw new ConflictException(
+                "Esiste già un blocco che copre parte di questo intervallo.",
+                Map.of("type", "OVERLAP", "slots", slots, "blocks", blocks)
+            );
+        }
+
+        // Cleanup: rimuovi blocchi orfani (senza slot) per questo giorno
+        for (BloccoOrario b : esistenti) {
+            if (slotRepository.findByBloccoOrarioIdOrderByDataEOraInizio(b.getId()).isEmpty()) {
+                bloccoOrarioRepository.delete(b);
+            }
         }
 
         BloccoOrario blocco = new BloccoOrario();

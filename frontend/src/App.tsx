@@ -23,6 +23,7 @@ import AdminMediciPage from "./pages/AdminMediciPage";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
 import AdminSediPage from "./pages/AdminSediPage";
 import AdminUtentiOpsPage from "./pages/AdminUtentiOpsPage";
+import AdminPrestazioniPage from "./pages/AdminPrestazioniPage";
 
 type ProtectedRouteProps = {
   children: React.ReactNode;
@@ -50,8 +51,8 @@ function App() {
         {/* Rotte pubbliche */}
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<Login />} />
-  <Route path="/forgot-password" element={<ForgotPassword />} />
-  <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/book" element={<BookingCalendar />} />
         <Route path="/register" element={<PazienteRegistrationForm />} />
 
@@ -82,6 +83,7 @@ function App() {
           <Route path="/admin/medici" element={<AdminMediciPage />} />
           <Route path="/admin/sedi" element={<AdminSediPage />} />
           <Route path="/admin/ops" element={<AdminUtentiOpsPage />} />
+          <Route path="/admin/prestazioni" element={<AdminPrestazioniPage />} />
         </Route>
 
         <Route

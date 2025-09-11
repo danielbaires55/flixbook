@@ -33,6 +33,11 @@ public class AppuntamentoService implements InitializingBean {
 
     private static final String INDIRIZZO_STUDIO = "Via della Spiga, 10 - 20121 Milano (MI)"; // fallback
     private static final String INDIRIZZO_STUDIO_SHORT = "Via della Spiga 10, Milano"; // fallback
+    private static String maskPhone(String s) {
+        if (s == null || s.length() < 5) return "***";
+        int keep = 3;
+        return s.substring(0, keep) + "***" + s.substring(s.length() - keep);
+    }
 
     @Autowired
     private AppuntamentoRepository appuntamentoRepository;
@@ -233,6 +238,7 @@ public class AppuntamentoService implements InitializingBean {
 
         String numeroTelefonoPaziente = paziente.getTelefono();
         if (numeroTelefonoPaziente != null && !numeroTelefonoPaziente.trim().isEmpty()) {
+            if (log.isDebugEnabled()) log.debug("[Appuntamento] Invio SMS ANNULLATO a {} per appuntamento {}", maskPhone(numeroTelefonoPaziente), appuntamento.getId());
             String dettagli = String.format(
                 "Dr. %s %s, %s, %s ore %s.",
                 medico.getNome(), medico.getCognome(),
@@ -241,6 +247,8 @@ public class AppuntamentoService implements InitializingBean {
                 appuntamento.getDataEOraInizio().toLocalTime().toString()
             );
             smsService.sendPatientAppointmentMessage(numeroTelefonoPaziente, "Annullato", dettagli);
+        } else {
+            if (log.isInfoEnabled()) log.info("[Appuntamento] Nessun numero telefono paziente, salto SMS annullamento per appuntamento {}", appuntamento.getId());
         }
     }
     
@@ -316,6 +324,7 @@ public class AppuntamentoService implements InitializingBean {
             if (!app.isSmsReminderInviato()) {
                 String numeroTelefono = paziente.getTelefono();
                 if (numeroTelefono != null && !numeroTelefono.trim().isEmpty()) {
+                    if (log.isDebugEnabled()) log.debug("[Appuntamento] Invio SMS PROMEMORIA a {} per appuntamento {}", maskPhone(numeroTelefono), app.getId());
                     StringBuilder details = new StringBuilder(String.format(
                         "Dr. %s %s, %s, %s ore %s.",
                         medico.getNome(), medico.getCognome(),
@@ -330,6 +339,8 @@ public class AppuntamentoService implements InitializingBean {
                     }
                     smsService.sendPatientAppointmentMessage(numeroTelefono, "Promemoria", details.toString());
                     app.setSmsReminderInviato(true);
+                } else {
+                    if (log.isInfoEnabled()) log.info("[Appuntamento] Nessun numero telefono paziente, salto SMS promemoria per appuntamento {}", app.getId());
                 }
             }
             appuntamentoRepository.save(app);
@@ -397,6 +408,7 @@ public class AppuntamentoService implements InitializingBean {
 
         String numeroTelefono = paziente.getTelefono();
         if (numeroTelefono != null && !numeroTelefono.trim().isEmpty()) {
+            if (log.isDebugEnabled()) log.debug("[Appuntamento] Invio SMS CONFERMA a {} per appuntamento {}", maskPhone(numeroTelefono), appuntamento.getId());
             StringBuilder dettagliSmsBuilder = new StringBuilder(String.format(
                 "Dr. %s %s, %s, %s ore %s.",
                 medico.getNome(), medico.getCognome(), prestazione.getNome(),
@@ -409,6 +421,8 @@ public class AppuntamentoService implements InitializingBean {
                 dettagliSmsBuilder.append(" Ind: ").append(formatIndirizzo(appuntamento, true));
             }
             smsService.sendPatientAppointmentMessage(numeroTelefono, "Confermato", dettagliSmsBuilder.toString());
+        } else {
+            if (log.isInfoEnabled()) log.info("[Appuntamento] Nessun numero telefono paziente, salto SMS conferma per appuntamento {}", appuntamento.getId());
         }
 
         // Notifica anche il medico della nuova prenotazione
@@ -675,6 +689,7 @@ public class AppuntamentoService implements InitializingBean {
                 }
             }
             if (p.getTelefono() != null && !p.getTelefono().isBlank()) {
+                if (log.isDebugEnabled()) log.debug("[Appuntamento] Invio SMS SPOSTATO a {} per appuntamento {}", maskPhone(p.getTelefono()), saved.getId());
                 StringBuilder details = new StringBuilder(String.format("Dr. %s %s, %s, %s ore %s.", m.getNome(), m.getCognome(), pr.getNome(), saved.getDataEOraInizio().toLocalDate(), saved.getDataEOraInizio().toLocalTime()));
                 if (saved.getTipoAppuntamento() == TipoAppuntamento.virtuale && saved.getLinkVideocall() != null) {
                     details.append(" VC: ").append(saved.getLinkVideocall());
@@ -682,6 +697,8 @@ public class AppuntamentoService implements InitializingBean {
                     details.append(" Ind: ").append(formatIndirizzo(saved, true));
                 }
                 smsService.sendPatientAppointmentMessage(p.getTelefono(), "Spostato", details.toString());
+            } else {
+                if (log.isInfoEnabled()) log.info("[Appuntamento] Nessun numero telefono paziente, salto SMS spostamento per appuntamento {}", saved.getId());
             }
         } catch (Exception ignored) {}
 

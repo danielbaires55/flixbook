@@ -4,6 +4,7 @@ import com.flixbook.flixbook_backend.config.CustomUserDetails;
 import com.flixbook.flixbook_backend.model.Prestazione;
 import com.flixbook.flixbook_backend.model.MedicoPrestazione;
 import com.flixbook.flixbook_backend.repository.PrestazioneRepository;
+import com.flixbook.flixbook_backend.repository.PrestazioneSedeRepository;
 import com.flixbook.flixbook_backend.repository.MedicoPrestazioneRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -24,6 +25,8 @@ public class PrestazioneController {
 
     @Autowired
     private PrestazioneRepository prestazioneRepository;
+    @Autowired
+    private PrestazioneSedeRepository prestazioneSedeRepository;
     
 
     @Autowired
@@ -31,8 +34,37 @@ public class PrestazioneController {
 
     // Endpoint pubblico (rimane invariato)
     @GetMapping("/bySpecialita/{id}")
-    public List<Prestazione> getPrestazioniBySpecialita(@PathVariable Long id) {
-        return prestazioneRepository.findBySpecialitaId(id);
+    public List<java.util.Map<String,Object>> getPrestazioniBySpecialita(@PathVariable Long id) {
+        var prestazioni = prestazioneRepository.findBySpecialitaId(id);
+        java.util.List<Long> ids = prestazioni.stream().map(Prestazione::getId).toList();
+        java.util.Map<Long, java.util.List<com.flixbook.flixbook_backend.model.PrestazioneSede>> pivotMap = new java.util.HashMap<>();
+        if (!ids.isEmpty()) {
+            var rows = prestazioneSedeRepository.findByPrestazioneIdIn(ids);
+            for (var r : rows) {
+                pivotMap.computeIfAbsent(r.getPrestazioneId(), k -> new java.util.ArrayList<>()).add(r);
+            }
+        }
+        java.util.List<java.util.Map<String,Object>> out = new java.util.ArrayList<>();
+        for (var p : prestazioni) {
+            var rows = pivotMap.getOrDefault(p.getId(), java.util.List.of());
+            Double min = null;
+            if (!rows.isEmpty()) {
+                min = rows.stream().map(com.flixbook.flixbook_backend.model.PrestazioneSede::getCosto)
+                        .filter(java.util.Objects::nonNull)
+                        .min(Double::compareTo).orElse(null);
+            }
+            if (min == null && p.getCosto() != null) {
+                // Fallback legacy costo centrale se non sono stati configurati prezzi per sede
+                min = p.getCosto();
+            }
+            var map = new java.util.LinkedHashMap<String,Object>();
+            map.put("id", p.getId());
+            map.put("nome", p.getNome());
+            map.put("tipoPrestazione", p.getTipoPrestazione());
+            map.put("costo", min);
+            out.add(map);
+        }
+        return out;
     }
 
     // =================================================================================

@@ -82,6 +82,9 @@ public class CustomUserDetailsService implements UserDetailsService {
         // --- Cerca il Collaboratore ---
         Collaboratore collaboratore = collaboratoreRepository.findByEmail(email).orElse(null);
         if (collaboratore != null) {
+            if (!collaboratore.isAttivo()) {
+                throw new UsernameNotFoundException("Collaboratore disattivato");
+            }
             // Restituisce il nostro oggetto personalizzato
             // Legge i medici gestiti dal collaboratore dalla join table (se vuota, fallback al legacy)
             var managed = jdbcTemplate.query("SELECT medico_id FROM collaboratori_medici WHERE collaboratore_id = ?",

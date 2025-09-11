@@ -119,6 +119,8 @@ const NavBar: FC<NavBarProps> = ({ onSpecialitaClick, onMediciClick, onContattiC
           <Link to="/admin/medici" className={`nav-link-button${isActive('/admin/medici')}`} onClick={() => setIsMobileMenuOpen(false)}>Admin · Medici</Link>
           <Link to="/admin/sedi" className={`nav-link-button${isActive('/admin/sedi')}`} onClick={() => setIsMobileMenuOpen(false)}>Admin · Sedi</Link>
           <Link to="/admin/ops" className={`nav-link-button${isActive('/admin/ops')}`} onClick={() => setIsMobileMenuOpen(false)}>Admin · Ops</Link>
+          <Link to="/admin/prestazioni" className={`nav-link-button${isActive('/admin/prestazioni')}`} onClick={() => setIsMobileMenuOpen(false)}>Admin · Prestazioni</Link>
+          <Link to="/admin" className={`nav-link-button${isActive('/admin')}`} onClick={() => setIsMobileMenuOpen(false)}>Admin · Dashboard</Link>
         </>
       )}
     </>
@@ -211,9 +213,11 @@ const NavBar: FC<NavBarProps> = ({ onSpecialitaClick, onMediciClick, onContattiC
   } else if (user?.role === 'ROLE_ADMIN') {
     navLinksToShow = (
       <>
+  <Link to="/admin" className={`nav-link-button${isActive('/admin')}`} onClick={() => setIsMobileMenuOpen(false)}>Admin · Dashboard</Link>
   <Link to="/admin/medici" className={`nav-link-button${isActive('/admin/medici')}`} onClick={() => setIsMobileMenuOpen(false)}>Admin · Medici</Link>
   <Link to="/admin/sedi" className={`nav-link-button${isActive('/admin/sedi')}`} onClick={() => setIsMobileMenuOpen(false)}>Admin · Sedi</Link>
   <Link to="/admin/ops" className={`nav-link-button${isActive('/admin/ops')}`} onClick={() => setIsMobileMenuOpen(false)}>Admin · Ops</Link>
+  <Link to="/admin/prestazioni" className={`nav-link-button${isActive('/admin/prestazioni')}`} onClick={() => setIsMobileMenuOpen(false)}>Admin · Prestazioni</Link>
       </>
     );
   } else {
