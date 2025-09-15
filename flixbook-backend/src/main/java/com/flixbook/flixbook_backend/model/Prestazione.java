@@ -17,6 +17,7 @@ public class Prestazione {
     private Specialita specialita;
 
     private String nome;
+    @Column(columnDefinition = "TEXT")
     private String descrizione;
     // Costo generale non più usato: i costi per sede sono in prestazioni_sedi; lasciato nullable per retrocompatibilità
     private Double costo;

@@ -22,6 +22,9 @@ public interface AppuntamentoRepository extends JpaRepository<Appuntamento, Long
 
        long countByMedico_Id(Long medicoId);
 
+       // Conteggio appuntamenti complessivi per una prestazione
+       long countByPrestazione_Id(Long prestazioneId);
+
     @Query("SELECT DISTINCT a FROM Appuntamento a " +
            "LEFT JOIN FETCH a.slot s " +
            "LEFT JOIN FETCH s.bloccoOrario b " +
@@ -83,6 +86,10 @@ public interface AppuntamentoRepository extends JpaRepository<Appuntamento, Long
        // Conteggio appuntamenti attivi (CONFERMATO) nel futuro per un medico
        @Query("SELECT COUNT(a) FROM Appuntamento a WHERE a.medico.id = :medicoId AND a.stato = com.flixbook.flixbook_backend.model.StatoAppuntamento.CONFERMATO AND a.dataEOraInizio > :now")
        long countAttiviFuturiByMedicoId(@Param("medicoId") Long medicoId, @Param("now") LocalDateTime now);
+
+       // Conteggio appuntamenti attivi (CONFERMATO) nel futuro per una prestazione
+       @Query("SELECT COUNT(a) FROM Appuntamento a WHERE a.prestazione.id = :prestazioneId AND a.stato = com.flixbook.flixbook_backend.model.StatoAppuntamento.CONFERMATO AND a.dataEOraInizio > :now")
+       long countAttiviFuturiByPrestazioneId(@Param("prestazioneId") Long prestazioneId, @Param("now") LocalDateTime now);
 
        @Query("SELECT a.id FROM Appuntamento a WHERE a.medico.id = :medicoId")
        List<Long> findIdsByMedicoId(@Param("medicoId") Long medicoId);

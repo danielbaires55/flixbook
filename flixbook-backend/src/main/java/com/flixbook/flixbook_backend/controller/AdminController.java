@@ -661,9 +661,27 @@ public class AdminController {
     public ResponseEntity<?> eliminaPrestazione(@PathVariable Long prestazioneId) {
         var p = prestazioneRepository.findById(prestazioneId).orElse(null);
         if (p == null) return ResponseEntity.notFound().build();
+        // Blocca eliminazione se esistono appuntamenti attivi nel futuro per questa prestazione
+        long attiviFuturi = appuntamentoRepository.countAttiviFuturiByPrestazioneId(prestazioneId, java.time.LocalDateTime.now());
+        if (attiviFuturi > 0) {
+            return ResponseEntity.status(409).body(Map.of(
+                "error", "Impossibile eliminare: esistono appuntamenti attivi nel futuro per questa prestazione",
+                "attiviFuturi", attiviFuturi
+            ));
+        }
+        // Inoltre, se esistono appuntamenti storici (qualsiasi stato), MySQL bloccherà l'eliminazione (FK RESTRICT)
+        long totApp = appuntamentoRepository.countByPrestazione_Id(prestazioneId);
+        if (totApp > 0) {
+            return ResponseEntity.status(409).body(Map.of(
+                "error", "Impossibile eliminare: esistono appuntamenti che referenziano questa prestazione",
+                "appuntamenti", totApp
+            ));
+        }
         // Rimuovi associazioni medico_prestazione
         medicoPrestazioneRepository.deleteByPrestazioneId(prestazioneId);
-    prestazioneSedeRepository.deleteByPrestazioneId(prestazioneId);
+        prestazioneSedeRepository.deleteByPrestazioneId(prestazioneId);
+        // Rimuovi associazioni dai blocchi orari (join table blocco_orario_prestazioni)
+        jdbcTemplate.update("DELETE FROM blocco_orario_prestazioni WHERE prestazione_id = ?", prestazioneId);
         prestazioneRepository.deleteById(prestazioneId);
         return ResponseEntity.noContent().build();
     }

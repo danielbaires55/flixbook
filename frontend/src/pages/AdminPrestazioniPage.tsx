@@ -18,6 +18,7 @@ export default function AdminPrestazioniPage() {
   const [prestazioni, setPrestazioni] = useState<Prestazione[]>([]);
   const [form, setForm] = useState({ nome:'', descrizione:'', durataMinuti:'30', tipoPrestazione:'fisico' });
   const [sedi, setSedi] = useState<Array<{id:number; nome:string}>>([]);
+  const [sediEnabled, setSediEnabled] = useState<Record<string, boolean>>({});
   const [sedePrezzi, setSedePrezzi] = useState<Record<string,string>>({});
   const [editing, setEditing] = useState<Prestazione | null>(null);
   const [loading, setLoading] = useState(false);
@@ -58,14 +59,34 @@ export default function AdminPrestazioniPage() {
     setForm(f => ({ ...f, [e.target.name]: e.target.value }));
   };
 
-  const resetForm = () => { setForm({ nome:'', descrizione:'', durataMinuti:'30', tipoPrestazione:'fisico' }); setSedePrezzi({}); setEditing(null); };
+  const resetForm = () => { setForm({ nome:'', descrizione:'', durataMinuti:'30', tipoPrestazione:'fisico' }); setSedePrezzi({}); setSediEnabled({}); setEditing(null); };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedSpecId) { setErrorModal({show:true,msg:'Seleziona una specialità'}); return; }
     setLoading(true);
+    // Valida che almeno una sede sia selezionata
+    const abilitati = Object.entries(sediEnabled).filter(([,en]) => en).map(([k]) => k);
+    if (abilitati.length === 0) {
+      setLoading(false);
+      setErrorModal({show:true,msg:'Seleziona almeno una sede'});
+      return;
+    }
+    // Richiede un prezzo valido per ogni sede selezionata
+    for (const sid of abilitati) {
+      const v = sedePrezzi[sid];
+      const num = Number(v);
+      if (v === undefined || v === '' || isNaN(num)) {
+        setLoading(false);
+        setErrorModal({show:true,msg:`Inserisci un prezzo valido per la sede ID ${sid}`});
+        return;
+      }
+    }
     const prezziValidi: Record<string, number> = {};
-    Object.entries(sedePrezzi).forEach(([k,v]) => { if (v !== '') { const num = Number(v); if (!isNaN(num)) prezziValidi[k]=num; }});
+    abilitati.forEach((sid) => {
+      const num = Number(sedePrezzi[sid]);
+      prezziValidi[sid] = num;
+    });
     const payload: PrestazionePayload = {
       nome: form.nome.trim(),
       descrizione: form.descrizione.trim() || null,
@@ -132,7 +153,14 @@ export default function AdminPrestazioniPage() {
 
   return (
     <div>
-      <h2>Gestione Prestazioni per Specialità</h2>
+      {(!user || user.role !== 'ROLE_ADMIN') && (
+        <div className="alert alert-warning mt-3">
+          Accesso riservato agli amministratori. Effettua login come admin.
+        </div>
+      )}
+  {user && user.role === 'ROLE_ADMIN' && (
+  <>
+  <h2>Gestione Prestazioni per Specialità</h2>
       <div className="mb-3">
         <label className="form-label">Specialità</label>
         <select className="form-select" value={selectedSpecId} onChange={onSpecChange}>
@@ -159,10 +187,19 @@ export default function AdminPrestazioniPage() {
               </div>
               {sedi.length>0 && (
                 <div className="mb-2 border rounded p-2" style={{maxHeight:220, overflowY:'auto'}}>
-                  <div className="small fw-semibold mb-1">Prezzi per sede (lascia vuoto per non impostare)</div>
+                  <div className="small fw-semibold mb-1">Seleziona sedi e imposta il prezzo</div>
                   {sedi.map(s => (
                     <div key={s.id} className="d-flex align-items-center mb-1 gap-2">
-                      <label className="form-label flex-grow-1 mb-0 small">{s.nome}</label>
+                      <div className="form-check flex-grow-1">
+                        <input
+                          id={`sede-${s.id}`}
+                          type="checkbox"
+                          className="form-check-input"
+                          checked={!!sediEnabled[s.id]}
+                          onChange={(e)=> setSediEnabled(prev => ({...prev, [s.id]: e.target.checked}))}
+                        />
+                        <label htmlFor={`sede-${s.id}`} className="form-check-label small ms-1">{s.nome}</label>
+                      </div>
                       <input
                         type="number"
                         step="0.01"
@@ -173,6 +210,7 @@ export default function AdminPrestazioniPage() {
                         placeholder="€"
                         min={0}
                         max={10000}
+                        disabled={!sediEnabled[s.id]}
                       />
                     </div>
                   ))}
@@ -206,7 +244,7 @@ export default function AdminPrestazioniPage() {
         </div>
       )}
 
-      {/* Modals */}
+  {/* Modals */}
       <Modal show={infoModal.show} onHide={() => setInfoModal(i=>({...i,show:false}))} centered>
         <Modal.Header closeButton><Modal.Title>{infoModal.title || 'Info'}</Modal.Title></Modal.Header>
         <Modal.Body>{infoModal.msg}</Modal.Body>
@@ -225,6 +263,8 @@ export default function AdminPrestazioniPage() {
           <Button variant="danger" onClick={confirmDelete}>Elimina</Button>
         </Modal.Footer>
       </Modal>
+  </>
+  )}
     </div>
   );
 }
