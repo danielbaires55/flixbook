@@ -32,6 +32,7 @@ public class AdminController {
     private final EmailService emailService;
     private final JdbcTemplate jdbcTemplate;
     private final AppuntamentoService appuntamentoService;
+    private final PazienteRepository pazienteRepository;
 
     public AdminController(MedicoRepository medicoRepository,
                            PasswordEncoder passwordEncoder,
@@ -47,7 +48,8 @@ public class AdminController {
                            BloccoOrarioRepository bloccoOrarioRepository,
                            EmailService emailService,
                            JdbcTemplate jdbcTemplate,
-                           AppuntamentoService appuntamentoService) {
+                           AppuntamentoService appuntamentoService,
+                           PazienteRepository pazienteRepository) {
         this.medicoRepository = medicoRepository;
         this.passwordEncoder = passwordEncoder;
         this.sedeRepository = sedeRepository;
@@ -63,6 +65,7 @@ public class AdminController {
         this.emailService = emailService;
         this.jdbcTemplate = jdbcTemplate;
         this.appuntamentoService = appuntamentoService;
+        this.pazienteRepository = pazienteRepository;
     }
 
     // -------------------- MEDICI --------------------
@@ -251,6 +254,84 @@ public class AdminController {
     }
 
     // -------------------- MANUAL TASKS (ADMIN) --------------------
+    /**
+     * Crea un appuntamento per conto del paziente (telefonico) senza toccare lo schema.
+     * Se pazienteId non è fornito, crea/riusa un "paziente rapido" con dati minimi.
+     * Richiede slot DISPONIBILE. Imposta slot a OCCUPATO.
+     * body: { slotId, prestazioneId, pazienteId?, paziente?: { nome,cognome,telefono,email? }, tipoAppuntamento?: fisico|virtuale }
+     */
+    @PostMapping("/appuntamenti")
+    @Transactional
+    public ResponseEntity<?> creaAppuntamentoPerStaff(@RequestBody Map<String, Object> body) {
+        Long slotId = parseLong(String.valueOf(body.get("slotId")));
+        Long prestazioneId = parseLong(String.valueOf(body.get("prestazioneId")));
+        Long pazienteId = null;
+        Object pazIdObj = body.get("pazienteId");
+        if (pazIdObj instanceof Number n) pazienteId = n.longValue();
+        else if (pazIdObj instanceof String s) pazienteId = parseLong(s);
+
+        if (slotId == null || prestazioneId == null) return ResponseEntity.badRequest().body(Map.of("error","slotId e prestazioneId sono obbligatori"));
+
+        var slotOpt = slotRepository.findById(slotId);
+        if (slotOpt.isEmpty()) return ResponseEntity.status(404).body(Map.of("error","Slot non trovato"));
+        var slot = slotOpt.get();
+        if (slot.getStato() != com.flixbook.flixbook_backend.model.SlotStato.DISPONIBILE) {
+            return ResponseEntity.status(409).body(Map.of("error","Slot non disponibile"));
+        }
+        var prestOpt = prestazioneRepository.findById(prestazioneId);
+        if (prestOpt.isEmpty()) return ResponseEntity.status(404).body(Map.of("error","Prestazione non trovata"));
+
+        Paziente paziente = null;
+        if (pazienteId != null) {
+            paziente = pazienteRepository.findById(pazienteId).orElse(null);
+            if (paziente == null) return ResponseEntity.status(404).body(Map.of("error","Paziente non trovato"));
+        } else {
+            @SuppressWarnings("unchecked") Map<String, Object> paz = (Map<String, Object>) body.get("paziente");
+            if (paz == null) return ResponseEntity.badRequest().body(Map.of("error","Dati paziente mancanti"));
+            String nome = trim((String) paz.get("nome"));
+            String cognome = trim((String) paz.get("cognome"));
+            String telefono = trim((String) paz.get("telefono"));
+            String email = trim((String) paz.get("email"));
+            String codiceFiscale = trim((String) paz.get("codiceFiscale"));
+            if (nome == null || cognome == null || telefono == null) return ResponseEntity.badRequest().body(Map.of("error","nome, cognome e telefono sono obbligatori"));
+            if (email != null && pazienteRepository.existsByEmail(email)) {
+                paziente = pazienteRepository.findByEmail(email).orElse(null);
+            }
+            if (paziente == null) {
+                // Crea paziente rapido
+                String effectiveEmail = (email != null && !email.isBlank()) ? email : ("noemail+" + System.currentTimeMillis() + "@invalid");
+                var pz = new com.flixbook.flixbook_backend.model.Paziente();
+                pz.setNome(nome);
+                pz.setCognome(cognome);
+                pz.setTelefono(telefono);
+                pz.setEmail(effectiveEmail);
+                pz.setPasswordHash(passwordEncoder.encode(java.util.UUID.randomUUID().toString()));
+                pz.setRuolo("ROLE_PAZIENTE");
+                pz.setDataRegistrazione(java.time.LocalDateTime.now());
+                if (codiceFiscale != null && !codiceFiscale.isBlank()) {
+                    pz.setCodiceFiscale(codiceFiscale);
+                }
+                paziente = pazienteRepository.save(pz);
+            }
+        }
+
+        // Crea appuntamento
+        var appuntamento = com.flixbook.flixbook_backend.model.Appuntamento.builder()
+                .paziente(paziente)
+                .medico(slot.getMedico())
+                .prestazione(prestOpt.get())
+                .dataEOraInizio(slot.getDataEOraInizio())
+                .dataEOraFine(slot.getDataEOraFine())
+                .tipoAppuntamento(prestOpt.get().getTipoPrestazione() == com.flixbook.flixbook_backend.model.TipoPrestazione.virtuale ? com.flixbook.flixbook_backend.model.TipoAppuntamento.virtuale : com.flixbook.flixbook_backend.model.TipoAppuntamento.fisico)
+                .stato(com.flixbook.flixbook_backend.model.StatoAppuntamento.CONFERMATO)
+                .dataPrenotazione(java.time.LocalDateTime.now())
+                .slot(slot)
+                .build();
+        appuntamento = appuntamentoRepository.save(appuntamento);
+        slot.setStato(com.flixbook.flixbook_backend.model.SlotStato.OCCUPATO);
+        slotRepository.save(slot);
+        return ResponseEntity.ok(Map.of("appuntamentoId", appuntamento.getId()));
+    }
     /**
      * Trigger manuale dell'invio richieste feedback per appuntamenti COMPLETATI con feedbackInviato=false.
      * Ritorna conteggi prima/dopo per diagnosi rapida. Solo ADMIN.

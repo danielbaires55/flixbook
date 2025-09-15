@@ -54,6 +54,11 @@ interface Appuntamento {
 }
 interface DocItem { id: number; originalName: string }
 interface SlotLite { data: string; oraInizio: string | number; slotId?: number; sedeId?: number; sedeNome?: string }
+interface StaffCreatePayload {
+    slotId: number;
+    prestazioneId: number;
+    paziente?: { nome: string; cognome: string; telefono?: string; email?: string; codiceFiscale?: string };
+}
 
 import { API_BASE_URL } from '../config/api';
 const SERVER_BASE_URL = API_BASE_URL.replace(/\/api$/, '');
@@ -75,6 +80,13 @@ const MedicoDashboard = () => {
     const [slots, setSlots] = useState<SlotItem[]>([]);
     const [slotsLoading, setSlotsLoading] = useState(false);
     const [slotsError, setSlotsError] = useState<string | null>(null);
+    // Staff-create appointment modal state
+    const [staffCreateOpen, setStaffCreateOpen] = useState(false);
+    const [staffCreateSlotId, setStaffCreateSlotId] = useState<number | null>(null);
+    const [staffCreatePrestazioni, setStaffCreatePrestazioni] = useState<Prestazione[]>([]);
+    const [staffForm, setStaffForm] = useState<{ nome: string; cognome: string; telefono: string; email: string; codiceFiscale: string; prestazioneId: number | '' }>({ nome: '', cognome: '', telefono: '', email: '', codiceFiscale: '', prestazioneId: '' });
+    const [staffSubmitting, setStaffSubmitting] = useState(false);
+    const [staffError, setStaffError] = useState<string | null>(null);
     // Patient info modal
     const [patientModalOpen, setPatientModalOpen] = useState(false);
     const [patientTarget, setPatientTarget] = useState<Paziente | null>(null);
@@ -223,6 +235,45 @@ const MedicoDashboard = () => {
             setSlotDeleteConfirmOpen(false);
             setErrorModalMessage('Errore: lo slot potrebbe essere già prenotato.');
             setErrorModalOpen(true);
+        }
+    };
+    const submitStaffCreate = async () => {
+        if (!user) return;
+        setStaffError(null);
+        if (!staffCreateSlotId) { setStaffError('Slot non valido.'); return; }
+        const nome = staffForm.nome.trim();
+        const cognome = staffForm.cognome.trim();
+        const telefono = staffForm.telefono.trim();
+        const email = staffForm.email.trim();
+        const prestazioneId = staffForm.prestazioneId;
+        if (!prestazioneId) { setStaffError('Seleziona una prestazione.'); return; }
+        if (!nome || !cognome) { setStaffError('Nome e cognome sono obbligatori.'); return; }
+        if (!telefono && !email) { setStaffError('Inserisci almeno telefono o email.'); return; }
+        try {
+            setStaffSubmitting(true);
+            const payload: StaffCreatePayload = { slotId: staffCreateSlotId, prestazioneId };
+            payload.paziente = { nome, cognome, telefono: telefono || undefined, email: email || undefined, codiceFiscale: (staffForm.codiceFiscale || '').trim() || undefined };
+            await axios.post(`${API_BASE_URL}/medici/appuntamenti/staff-create`, payload, { headers: { Authorization: `Bearer ${user.token}` } });
+            setSlots(prev => prev.map(s => s.id === staffCreateSlotId ? { ...s, stato: 'OCCUPATO' } as SlotItem : s));
+            // Refresh agenda rapidamente
+            try {
+                if (user.medicoId) {
+                    const { data } = await axios.get(`${API_BASE_URL}/appuntamenti/medico/${user.medicoId}`, { headers: { Authorization: `Bearer ${user.token}` } });
+                    setAppuntamenti(data);
+                }
+            } catch { /* non-blocking */ }
+            setStaffCreateOpen(false);
+            setStaffCreateSlotId(null);
+            setStaffCreatePrestazioni([]);
+            setStaffForm({ nome: '', cognome: '', telefono: '', email: '', codiceFiscale: '', prestazioneId: '' });
+        } catch (e: unknown) {
+            const resp = (e as { response?: { status?: number; data?: unknown } })?.response;
+            let msg = 'Prenotazione non riuscita. Lo slot potrebbe non essere più disponibile.';
+            if (resp?.status === 409) msg = 'Lo slot non è più disponibile.';
+            else if (typeof resp?.data === 'string') msg = resp!.data as string;
+            setStaffError(msg);
+        } finally {
+            setStaffSubmitting(false);
         }
     };
     const handleEliminaBlocco = async (bloccoId: number) => {
@@ -729,6 +780,18 @@ const MedicoDashboard = () => {
                                                                                                         <button className="btn btn-sm btn-outline-secondary" onClick={() => handleToggleSlot(s.id)} disabled={s.stato === 'OCCUPATO'}>
                                                                                                             {s.stato === 'DISPONIBILE' ? 'Disabilita' : 'Abilita'}
                                                                                                         </button>
+                                                                                                        {s.stato === 'DISPONIBILE' && (
+                                                                                                            <button className="btn btn-sm btn-primary" onClick={() => {
+                                                                                                                // Compute prestazioni selezionabili: se il blocco ha restrizioni usa quelle, altrimenti tutte del medico
+                                                                                                                const allowed = (b.prestazioneIds && b.prestazioneIds.length > 0)
+                                                                                                                    ? prestazioniMedico.filter(p => b.prestazioneIds?.includes(p.id))
+                                                                                                                    : prestazioniMedico;
+                                                                                                                setStaffCreatePrestazioni(allowed);
+                                                                                                                setStaffCreateSlotId(s.id);
+                                                                                                                setStaffForm({ nome: '', cognome: '', telefono: '', email: '', codiceFiscale: '', prestazioneId: allowed.length === 1 ? allowed[0].id : '' });
+                                                                                                                setStaffCreateOpen(true);
+                                                                                                            }}>Prenota per paziente</button>
+                                                                                                        )}
                                                                                                         <button className="btn btn-sm btn-outline-danger" onClick={() => openEliminaSlotConfirm(s.id)} disabled={s.stato === 'OCCUPATO'}>Elimina</button>
                                                                                                     </div>
                                                                                                 </li>
@@ -757,6 +820,63 @@ const MedicoDashboard = () => {
                     })()}
                 </div>
             </div>
+
+                    {/* Modale: Prenotazione per paziente (staff) */}
+                    <Modal show={staffCreateOpen} onHide={() => { if (!staffSubmitting) { setStaffCreateOpen(false); setStaffError(null); } }} centered>
+                        <Modal.Header closeButton>
+                            <Modal.Title>Prenota per paziente</Modal.Title>
+                        </Modal.Header>
+                        <Modal.Body>
+                            {staffError && <div className="alert alert-danger">{staffError}</div>}
+                            <div className="mb-3">
+                                <label className="form-label">Prestazione</label>
+                                <Form.Select
+                                    value={staffForm.prestazioneId === '' ? '' : staffForm.prestazioneId}
+                                    onChange={e => setStaffForm(f => ({ ...f, prestazioneId: e.target.value ? Number(e.target.value) : '' }))}
+                                    disabled={staffSubmitting || staffCreatePrestazioni.length <= 1}
+                                >
+                                    {staffCreatePrestazioni.length !== 1 && <option value="">Seleziona…</option>}
+                                    {staffCreatePrestazioni.map(p => (
+                                        <option key={p.id} value={p.id}>{p.nome}</option>
+                                    ))}
+                                </Form.Select>
+                                {staffCreatePrestazioni.length === 1 && (
+                                    <div className="form-text">Prestazione predefinita per questo slot.</div>
+                                )}
+                            </div>
+                            <div className="row g-2">
+                                <div className="col-sm-6">
+                                    <label className="form-label">Nome</label>
+                                    <input className="form-control" value={staffForm.nome} onChange={e => setStaffForm(f => ({ ...f, nome: e.target.value }))} disabled={staffSubmitting} />
+                                </div>
+                                <div className="col-sm-6">
+                                    <label className="form-label">Cognome</label>
+                                    <input className="form-control" value={staffForm.cognome} onChange={e => setStaffForm(f => ({ ...f, cognome: e.target.value }))} disabled={staffSubmitting} />
+                                </div>
+                            </div>
+                            <div className="row g-2 mt-2">
+                                <div className="col-sm-6">
+                                    <label className="form-label">Telefono</label>
+                                    <input className="form-control" value={staffForm.telefono} onChange={e => setStaffForm(f => ({ ...f, telefono: e.target.value }))} disabled={staffSubmitting} />
+                                </div>
+                                <div className="col-sm-6">
+                                    <label className="form-label">Email</label>
+                                    <input type="email" className="form-control" value={staffForm.email} onChange={e => setStaffForm(f => ({ ...f, email: e.target.value }))} disabled={staffSubmitting} />
+                                </div>
+                            </div>
+                            <div className="row g-2 mt-2">
+                                <div className="col-sm-6">
+                                    <label className="form-label">Codice Fiscale</label>
+                                    <input className="form-control" value={staffForm.codiceFiscale} onChange={e => setStaffForm(f => ({ ...f, codiceFiscale: e.target.value.toUpperCase() }))} disabled={staffSubmitting} placeholder="(opzionale)" />
+                                </div>
+                            </div>
+                            <div className="form-text mt-2">Nome e cognome obbligatori. Inserire almeno telefono o email.</div>
+                        </Modal.Body>
+                        <Modal.Footer>
+                            <Button variant="secondary" onClick={() => setStaffCreateOpen(false)} disabled={staffSubmitting}>Annulla</Button>
+                            <Button variant="primary" onClick={submitStaffCreate} disabled={staffSubmitting || !staffCreateSlotId}>Conferma prenotazione</Button>
+                        </Modal.Footer>
+                    </Modal>
 
                     {/* Modale: Storico appuntamenti */}
                     <Modal show={showStoricoModal} onHide={() => setShowStoricoModal(false)} centered size="lg" scrollable>
