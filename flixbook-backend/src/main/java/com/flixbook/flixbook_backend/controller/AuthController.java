@@ -8,7 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication; // Import this
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import java.util.Map;
@@ -25,7 +25,6 @@ public class AuthController {
     private final JwtUtil jwtUtil;
     private final MedicoRepository medicoRepository;
 
-    // The dependency on CustomUserDetailsService is no longer needed here!
     private final com.flixbook.flixbook_backend.service.PasswordResetService passwordResetService;
 
     public AuthController(AuthenticationManager authenticationManager, JwtUtil jwtUtil, MedicoRepository medicoRepository,

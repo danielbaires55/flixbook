@@ -6,21 +6,21 @@ export default function AdminDashboardPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  useEffect(() => { document.title = 'Admin Dashboard'; }, []);
+  useEffect(() => { document.title = 'Area Amministratore'; }, []);
 
   if (!user) return null;
   if (user.role !== 'ROLE_ADMIN') return <Navigate to="/" replace />;
 
   const cards: Array<{ title: string; path: string; desc: string; color?: string }> = [
-    { title: 'Medici', path: '/admin/medici', desc: 'Crea e gestisci i medici, specialità e sedi associate', color: 'primary' },
-    { title: 'Sedi', path: '/admin/sedi', desc: 'Gestisci le sedi e le loro coordinate (geocoding)', color: 'success' },
-    { title: 'Ops / Associazioni', path: '/admin/ops', desc: 'Associa sedi e collaboratori ai medici', color: 'warning' },
-    { title: 'Prestazioni', path: '/admin/prestazioni', desc: 'Gestisci l\'elenco delle prestazioni per ogni specialità: crea, modifica, elimina e aggiorna costi/durata.', color: 'info' },
+    { title: 'Medici', path: '/admin/medici', desc: 'Crea e gestisci i medici, le specialità e le sedi', color: 'primary' },
+    { title: 'Sedi', path: '/admin/sedi', desc: 'Aggiungi e modifica le sedi della clinica', color: 'success' },
+    { title: 'Collaboratori', path: '/admin/ops', desc: 'Crea e gestisci i collaboratori. L\'assegnazione ai medici avviene nella scheda del medico.', color: 'warning' },
+    { title: 'Prestazioni', path: '/admin/prestazioni', desc: 'Gestisci l\'elenco delle prestazioni e i prezzi per sede', color: 'info' },
   ];
 
   return (
     <div className="d-flex flex-column align-items-center justify-content-center" style={{ minHeight: '60vh' }}>
-      <h1 className="mb-4 fw-bold text-center">Pannello Amministratore</h1>
+  <h1 className="mb-4 fw-bold text-center">Area Amministratore</h1>
       <div className="row g-4 justify-content-center" style={{ maxWidth: 1100 }}>
         {cards.map(c => {
           const borderClass = `border-${c.color || 'primary'}`;
@@ -40,7 +40,7 @@ export default function AdminDashboardPage() {
         })}
       </div>
       <div className="mt-5 text-muted small text-center" style={{ maxWidth: 760 }}>
-        Questi moduli consentono di amministrare risorse core del sistema. Usa le sezioni per creare medici, gestire le specialità, configurare le sedi con latitudine/longitudine e assegnare sedi o collaboratori ai medici.
+        Da qui puoi gestire medici, sedi, collaboratori e prestazioni. L\'assegnazione dei collaboratori ai medici si effettua dalla scheda del singolo medico.
       </div>
     </div>
   );

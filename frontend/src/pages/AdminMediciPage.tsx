@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import axios from 'axios';
-import { Modal, Button } from 'react-bootstrap';
+import { Modal, Button, Nav, Tab } from 'react-bootstrap';
 import { useAuth } from '../context/useAuth';
 
 import { API_BASE_URL } from '../config/api';
@@ -31,6 +31,13 @@ export default function AdminMediciPage() {
   const [manageOpen, setManageOpen] = useState(false);
   const [selectedMedico, setSelectedMedico] = useState<Medico | null>(null);
   const [manageIds, setManageIds] = useState<string[]>([]);
+  const [manageTab, setManageTab] = useState<'spec' | 'sedi' | 'collab'>('spec');
+  // State for Sedi and Collaboratori tabs
+  const [assignedSedi, setAssignedSedi] = useState<Sede[]>([]);
+  type Collaboratore = { id: number; nome: string; cognome: string; email: string; telefono?: string; attivo?: boolean };
+  const [assignedCollabs, setAssignedCollabs] = useState<Collaboratore[]>([]);
+  const [allCollabs, setAllCollabs] = useState<Collaboratore[]>([]);
+  const [selectedExistingCollabId, setSelectedExistingCollabId] = useState<number | ''>('');
   const [saving, setSaving] = useState(false);
   const [warn, setWarn] = useState<{ show: boolean; title: string; message: string }>(() => ({ show: false, title: '', message: '' }));
   const [info, setInfo] = useState<{ show: boolean; title: string; message: string }>(() => ({ show: false, title: '', message: '' }));
@@ -165,6 +172,7 @@ export default function AdminMediciPage() {
     setSelectedMedico(m);
     const current = medicoSpec[m.id] || [];
     setManageIds(current.map(s => String(s.id)));
+    setManageTab('spec');
     setManageOpen(true);
   };
   const closeManage = () => { setManageOpen(false); setSelectedMedico(null); };
@@ -195,6 +203,53 @@ export default function AdminMediciPage() {
       setSaving(false);
     }
   };
+
+  // --- Manage Sedi helpers ---
+  const refreshAssignedSedi = useCallback(async (mid: number) => {
+    const { data } = await axios.get<Sede[]>(`${API_BASE_URL}/admin/medici/${mid}/sedi`, { headers });
+    setAssignedSedi(data);
+  }, [headers]);
+  const assignSede = async (mid: number, sedeId: number) => {
+    await axios.post(`${API_BASE_URL}/admin/medici/${mid}/sedi/${sedeId}`, null, { headers });
+    await refreshAssignedSedi(mid);
+  };
+  const unassignSede = async (mid: number, sedeId: number) => {
+    const resp = await axios.delete(`${API_BASE_URL}/admin/medici/${mid}/sedi/${sedeId}`, { headers, validateStatus: () => true });
+    if (resp.status === 204 || resp.status === 200) await refreshAssignedSedi(mid);
+  };
+
+  // --- Manage Collaboratori helpers ---
+  const refreshAssignedCollabs = useCallback(async (mid: number) => {
+    const { data } = await axios.get<Collaboratore[]>(`${API_BASE_URL}/admin/medici/${mid}/collaboratori`, { headers });
+    setAssignedCollabs(data);
+  }, [headers]);
+  const refreshAllCollabs = useCallback(async () => {
+    const { data } = await axios.get<Collaboratore[]>(`${API_BASE_URL}/admin/collaboratori`, { headers });
+    setAllCollabs(data);
+  }, [headers]);
+  const assignExistingCollabToMedico = async (mid: number, collabId: number) => {
+    await axios.post(`${API_BASE_URL}/admin/medici/${mid}/collaboratori/${collabId}`, null, { headers });
+    await refreshAssignedCollabs(mid);
+    await refreshAllCollabs();
+    setSelectedExistingCollabId('');
+  };
+  const unassignCollabFromMedico = async (mid: number, collabId: number) => {
+    const resp = await axios.delete(`${API_BASE_URL}/admin/medici/${mid}/collaboratori/${collabId}`, { headers, validateStatus: () => true });
+    if (resp.status === 204 || resp.status === 200) {
+      await refreshAssignedCollabs(mid);
+      await refreshAllCollabs();
+    }
+  };
+
+  // Load data when opening modal for non-spec tabs
+  useEffect(() => {
+    if (!manageOpen || !selectedMedico) return;
+    const mid = selectedMedico.id;
+    // Always refresh both so switching tabs is instant
+    refreshAssignedSedi(mid);
+    refreshAssignedCollabs(mid);
+    refreshAllCollabs();
+  }, [manageOpen, selectedMedico, refreshAssignedSedi, refreshAssignedCollabs, refreshAllCollabs]);
 
   const deleteMedico = async (m: Medico) => {
     try {
@@ -253,7 +308,7 @@ export default function AdminMediciPage() {
 
   return (
     <div>
-      <h2>Gestione Medici (Admin)</h2>
+  <h2>Medici</h2>
       {!isAdmin && (
         <div className="alert alert-warning" role="alert">
           Devi essere amministratore per creare e gestire i medici.
@@ -367,35 +422,97 @@ export default function AdminMediciPage() {
         </table>
       </div>
 
-      <Modal show={manageOpen} onHide={closeManage} centered>
+      <Modal show={manageOpen} onHide={closeManage} centered size="lg">
         <Modal.Header closeButton>
-          <Modal.Title>Gestisci specialità {selectedMedico ? `${selectedMedico.cognome} ${selectedMedico.nome}` : ''}</Modal.Title>
+          <Modal.Title>Gestisci {selectedMedico ? `${selectedMedico.cognome} ${selectedMedico.nome}` : ''}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          <div className="d-flex flex-wrap gap-2">
-            {specialita.map(s => {
-              const idStr = String(s.id);
-              const inputId = `manage-spec-${s.id}`;
-              const active = manageIds.includes(idStr);
-              return (
-                <span key={s.id}>
-                  <input type="checkbox" className="btn-check" id={inputId} autoComplete="off"
-                         checked={active} onChange={() => manageToggle(idStr)} />
-                  <label className={`btn btn-sm ${active ? 'btn-primary' : 'btn-outline-primary'}`} htmlFor={inputId}>
-                    {s.nome}
-                  </label>
-                </span>
-              );
-            })}
-          </div>
-          <div className="d-flex gap-2 mt-3">
-            <Button variant="outline-secondary" size="sm" onClick={manageSelectAll}>Seleziona tutte</Button>
-            <Button variant="outline-secondary" size="sm" onClick={manageSelectNone}>Deseleziona tutte</Button>
-          </div>
+          <Tab.Container activeKey={manageTab} onSelect={(k: string | null) => setManageTab((k as 'spec' | 'sedi' | 'collab') || 'spec')}>
+            <Nav variant="tabs">
+              <Nav.Item><Nav.Link eventKey="spec">Specialità</Nav.Link></Nav.Item>
+              <Nav.Item><Nav.Link eventKey="sedi">Sedi del medico</Nav.Link></Nav.Item>
+              <Nav.Item><Nav.Link eventKey="collab">Collaboratori del medico</Nav.Link></Nav.Item>
+            </Nav>
+            <Tab.Content className="pt-3">
+              <Tab.Pane eventKey="spec">
+                <div className="d-flex flex-wrap gap-2">
+                  {specialita.map(s => {
+                    const idStr = String(s.id);
+                    const inputId = `manage-spec-${s.id}`;
+                    const active = manageIds.includes(idStr);
+                    return (
+                      <span key={s.id}>
+                        <input type="checkbox" className="btn-check" id={inputId} autoComplete="off"
+                               checked={active} onChange={() => manageToggle(idStr)} />
+                        <label className={`btn btn-sm ${active ? 'btn-primary' : 'btn-outline-primary'}`} htmlFor={inputId}>
+                          {s.nome}
+                        </label>
+                      </span>
+                    );
+                  })}
+                </div>
+                <div className="d-flex gap-2 mt-3">
+                  <Button variant="outline-secondary" size="sm" onClick={manageSelectAll}>Seleziona tutte</Button>
+                  <Button variant="outline-secondary" size="sm" onClick={manageSelectNone}>Deseleziona tutte</Button>
+                </div>
+              </Tab.Pane>
+              <Tab.Pane eventKey="sedi">
+                {!selectedMedico ? null : (
+                  <div className="row g-2">
+                    {sedi.map(s => {
+                      const isAssigned = assignedSedi.some(a => a.id === s.id);
+                      return (
+                        <div className="col-sm-6" key={s.id}>
+                          <div className="d-flex justify-content-between align-items-center border rounded p-2">
+                            <div>{s.nome}</div>
+                            {isAssigned ? (
+                              <Button size="sm" variant="outline-danger" onClick={() => unassignSede(selectedMedico.id, s.id)}>Rimuovi</Button>
+                            ) : (
+                              <Button size="sm" variant="outline-success" onClick={() => assignSede(selectedMedico.id, s.id)}>Assegna</Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </Tab.Pane>
+              <Tab.Pane eventKey="collab">
+                {!selectedMedico ? null : (
+                  <div className="d-flex flex-column gap-3">
+                    <div className="d-flex gap-2">
+                      <select className="form-select" value={selectedExistingCollabId} onChange={e => setSelectedExistingCollabId(e.target.value ? Number(e.target.value) : '')}>
+                        <option value="">Aggiungi esistente…</option>
+                        {allCollabs
+                          .filter(c => !assignedCollabs.some(ac => ac.id === c.id))
+                          .map(c => <option key={c.id} value={c.id}>{c.cognome} {c.nome} · {c.email}</option>)}
+                      </select>
+                      <Button variant="outline-primary" disabled={!selectedExistingCollabId} onClick={() => assignExistingCollabToMedico(selectedMedico.id, Number(selectedExistingCollabId))}>Assegna</Button>
+                    </div>
+                    <ul className="list-group">
+                      {assignedCollabs.map(c => (
+                        <li key={c.id} className="list-group-item d-flex justify-content-between align-items-center">
+                          <div>
+                            {c.cognome} {c.nome} · {c.email} {c.attivo === false ? <span className="badge text-bg-secondary">disattivato</span> : <span className="badge text-bg-success">attivo</span>}
+                          </div>
+                          <div>
+                            <Button size="sm" variant="outline-secondary" onClick={() => unassignCollabFromMedico(selectedMedico.id, c.id)}>Rimuovi</Button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="form-text">La creazione di nuovi collaboratori resta nella pagina "Admin · Ops" per mantenerla indipendente dal medico.</div>
+                  </div>
+                )}
+              </Tab.Pane>
+            </Tab.Content>
+          </Tab.Container>
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" onClick={closeManage} disabled={saving}>Annulla</Button>
-          <Button variant="primary" onClick={saveManage} disabled={saving}>{saving ? 'Salvataggio…' : 'Salva'}</Button>
+          <Button variant="secondary" onClick={closeManage} disabled={saving}>Chiudi</Button>
+          {manageTab === 'spec' && (
+            <Button variant="primary" onClick={saveManage} disabled={saving}>{saving ? 'Salvataggio…' : 'Salva Specialità'}</Button>
+          )}
         </Modal.Footer>
       </Modal>
 

@@ -497,35 +497,39 @@ public class AdminController {
     @PostMapping("/collaboratori")
     @Transactional
     public ResponseEntity<?> createCollaboratore(@RequestBody Map<String, String> body) {
-        Long medicoId = parseLong(body.get("medicoId"));
+        Long medicoId = parseLong(body.get("medicoId")); // ora opzionale
         String nome = trim(body.get("nome"));
         String cognome = trim(body.get("cognome"));
         String email = trim(body.get("email"));
         String telefono = trim(body.get("telefono"));
         String password = body.get("password");
         boolean attivo = true; // sempre attivo alla creazione
-        if (medicoId == null || nome == null || cognome == null || email == null || password == null || password.length() < 6) {
-            return ResponseEntity.badRequest().body(Map.of("error", "medicoId, nome, cognome, email e password (>=6) sono obbligatori"));
+        if (nome == null || cognome == null || email == null || password == null || password.length() < 6) {
+            return ResponseEntity.badRequest().body(Map.of("error", "nome, cognome, email e password (>=6) sono obbligatori"));
         }
-    if (!medicoRepository.existsById(medicoId)) return ResponseEntity.badRequest().body(Map.of("error", "Medico non trovato"));
         if (collaboratoreRepository.findByEmail(email).isPresent()) {
             return ResponseEntity.status(409).body(Map.of("error", "Email collaboratore già in uso"));
         }
-    Collaboratore c = Collaboratore.builder()
-        .nome(nome)
-        .cognome(cognome)
-        .email(email)
-        .telefono(telefono)
-		.attivo(attivo)
-        .passwordHash(passwordEncoder.encode(password))
-        .build();
-    c = collaboratoreRepository.save(c);
-    // Crea associazione nella join table
-    jdbcTemplate.update("INSERT INTO collaboratori_medici(collaboratore_id, medico_id) VALUES (?, ?)", c.getId(), medicoId);
+        Collaboratore c = Collaboratore.builder()
+            .nome(nome)
+            .cognome(cognome)
+            .email(email)
+            .telefono(telefono)
+            .attivo(attivo)
+            .passwordHash(passwordEncoder.encode(password))
+            .build();
+        c = collaboratoreRepository.save(c);
 
-        // Email di benvenuto (come per medico) con password in chiaro per semplicità
+        // Se fornito, collega subito al medico indicato
+        if (medicoId != null) {
+            if (!medicoRepository.existsById(medicoId)) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Medico non trovato"));
+            }
+            jdbcTemplate.update("INSERT INTO collaboratori_medici(collaboratore_id, medico_id) VALUES (?, ?)", c.getId(), medicoId);
+        }
+
+        // Email di benvenuto con eventuale nota di assegnazione
         try {
-            var medico = medicoRepository.findById(medicoId).orElse(null);
             String link = "http://localhost:5173/login"; // TODO esternalizzare
             StringBuilder bodyEmail = new StringBuilder();
             bodyEmail.append("Ciao ").append(c.getNome()).append(",\n\n")
@@ -534,9 +538,12 @@ public class AdminController {
                 .append("Email: ").append(c.getEmail()).append('\n')
                 .append("Password temporanea: ").append(password).append("\n\n")
                 .append("Accedi da: ").append(link).append("\n");
-            if (medico != null) {
-                bodyEmail.append("Sei stato inizialmente assegnato al medico: ")
-                        .append(medico.getNome()).append(' ').append(medico.getCognome()).append("\n");
+            if (medicoId != null) {
+                var medico = medicoRepository.findById(medicoId).orElse(null);
+                if (medico != null) {
+                    bodyEmail.append("Sei stato inizialmente assegnato al medico: ")
+                            .append(medico.getNome()).append(' ').append(medico.getCognome()).append("\n");
+                }
             }
             bodyEmail.append("Ti consigliamo di cambiare la password al primo login dal tuo profilo.\n\n")
                     .append("--\nFlixbook");
@@ -544,7 +551,7 @@ public class AdminController {
         } catch (Exception ex) {
             System.err.println("[WARN] Invio email benvenuto collaboratore fallito: " + ex.getMessage());
         }
-    return ResponseEntity.ok(c);
+        return ResponseEntity.ok(c);
     }
 
     @PutMapping("/collaboratori/{id}")

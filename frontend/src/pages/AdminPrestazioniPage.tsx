@@ -160,7 +160,7 @@ export default function AdminPrestazioniPage() {
       )}
   {user && user.role === 'ROLE_ADMIN' && (
   <>
-  <h2>Gestione Prestazioni per Specialità</h2>
+  <h2>Prestazioni per specialità</h2>
       <div className="mb-3">
         <label className="form-label">Specialità</label>
         <select className="form-select" value={selectedSpecId} onChange={onSpecChange}>
@@ -171,7 +171,7 @@ export default function AdminPrestazioniPage() {
       {selectedSpecId && (
         <div className="row">
           <div className="col-md-5">
-            <h4>{editing ? 'Modifica Prestazione' : 'Nuova Prestazione'}</h4>
+            <h4>{editing ? 'Modifica prestazione' : 'Nuova prestazione'}</h4>
             <form onSubmit={submit}>
               <div className="mb-2"><input name="nome" className="form-control" placeholder="Nome" value={form.nome} onChange={onChange} required minLength={3} /></div>
               <div className="mb-2"><textarea name="descrizione" className="form-control" placeholder="Descrizione" value={form.descrizione} onChange={onChange} rows={2}></textarea></div>
@@ -224,7 +224,7 @@ export default function AdminPrestazioniPage() {
             </form>
           </div>
           <div className="col-md-7">
-            <h4>Prestazioni</h4>
+            <h4>Elenco prestazioni</h4>
             {prestazioni.length === 0 && <p className="text-muted">Nessuna prestazione per questa specialità.</p>}
             <ul className="list-group">
               {prestazioni.map(p => (

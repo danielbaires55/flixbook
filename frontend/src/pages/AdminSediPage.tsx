@@ -113,7 +113,7 @@ export default function AdminSediPage() {
 
   return (
     <div>
-      <h2>Gestione Sedi (Admin)</h2>
+  <h2>Sedi della clinica</h2>
       <form onSubmit={onSubmit} style={{ maxWidth: 520 }}>
         <div className="mb-2"><input className="form-control" name="nome" placeholder="Nome sede" value={form.nome || ''} onChange={onChange} required /></div>
         <div className="mb-2"><input className="form-control" name="indirizzo" placeholder="Indirizzo" value={form.indirizzo || ''} onChange={onChange} /></div>
@@ -144,7 +144,7 @@ export default function AdminSediPage() {
         </div>
       </form>
 
-      <h3 className="mt-4">Sedi</h3>
+  <h3 className="mt-4">Elenco sedi</h3>
       <div className="table-responsive">
         <table className="table table-sm align-middle">
           <thead>
